@@ -1,5 +1,5 @@
-import { AuthButton } from '@/components/auth-button';
-import { ThemeSwitcher } from '@/components/theme-switcher';
+import { AuthButton } from '@/features/auth/components/auth-button';
+import { ThemeSwitcher } from '@/components/theme/theme-switcher';
 import Link from 'next/link';
 
 export default function Home() {

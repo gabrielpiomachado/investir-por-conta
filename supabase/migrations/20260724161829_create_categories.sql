@@ -100,7 +100,7 @@ with check (
 
 -- =========================================================
 -- Policy: DELETE
--- Usuários autenticados excluem somente categorias  próprias
+-- Usuários autenticados excluem somente categorias próprias
 -- =========================================================
 
 create policy categories_delete_policy
