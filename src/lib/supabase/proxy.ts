@@ -51,6 +51,7 @@ export async function updateSession(request: NextRequest) {
     { path: '/forgot-password', whenAuthenticated: 'next' },
     { path: '/sign-up-success', whenAuthenticated: 'next' },
     { path: '/error', whenAuthenticated: 'next' },
+    { path: '/callback', whenAuthenticated: 'next' },
 
     { path: '/', whenAuthenticated: 'next' },
     { path: '/pricing', whenAuthenticated: 'next' },
@@ -82,7 +83,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && publicRoute && publicRoute.whenAuthenticated === 'redirect') {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/dashboard';
 
     const response = NextResponse.redirect(url);
 
