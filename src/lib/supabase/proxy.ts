@@ -55,6 +55,9 @@ export async function updateSession(request: NextRequest) {
 
     { path: '/', whenAuthenticated: 'next' },
     { path: '/pricing', whenAuthenticated: 'next' },
+    { path: '/blog', whenAuthenticated: 'next' },
+    { path: '/about', whenAuthenticated: 'next' },
+    { path: '/faq', whenAuthenticated: 'next' },
   ] as const;
 
   const REDIRECT_WHEN_NOT_AUTHENTICATED_ROUTE = '/sign-in';

@@ -1,18 +1,16 @@
-import { AuthButton } from '@/features/auth/components/auth-button';
 import { DashboardHeader } from '@/components/layout/dashboard-header';
+import { Footer } from '@/components/layout/footer';
 
-export default function ProtectedLayout({
+export default function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className="flex min-h-screen flex-col">
       <DashboardHeader />
-      <div>
-        <AuthButton />
-      </div>
-      <div>{children}</div>
+      <main className="flex-1">{children}</main>
+      <Footer />
     </div>
   );
 }
