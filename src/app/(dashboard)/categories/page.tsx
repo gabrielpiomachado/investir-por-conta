@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { CategoryForm } from '@/features/categories/components/category-form';
 
 function formatCategoryType(type: 'income' | 'expense') {
   return type === 'income' ? 'Receita' : 'Despesa';
@@ -50,6 +51,8 @@ export default async function CategoriesPage() {
       <div>
         <h1 className="text-3xl font-semibold">Categorias</h1>
       </div>
+
+      <CategoryForm />
 
       <div className="grid gap-6 md:grid-cols-2">
         <section className="rounded-lg border bg-card p-4 shadow-sm">
