@@ -61,6 +61,47 @@ export type Database = {
         }
         Relationships: []
       }
+      transactions: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          description: string | null
+          id: string
+          transaction_date: string
+          transaction_type: Database["public"]["Enums"]["category_type"]
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          transaction_date: string
+          transaction_type: Database["public"]["Enums"]["category_type"]
+          user_id?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          transaction_date?: string
+          transaction_type?: Database["public"]["Enums"]["category_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -204,4 +245,3 @@ export const Constants = {
     },
   },
 } as const
-

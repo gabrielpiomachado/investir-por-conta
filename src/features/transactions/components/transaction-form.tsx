@@ -1,0 +1,265 @@
+'use client';
+
+import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Dialog } from '@base-ui/react/dialog';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { createClient } from '@/lib/supabase/client';
+import { transactionSchema } from '../schemas/transaction.schema';
+import type { Category } from '@/features/categories/components/category-form';
+
+type TransactionFormProps = {
+  categories: Category[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+const selectClassName =
+  'h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+
+function getLocalDateInputValue() {
+  const today = new Date();
+  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  return today.toISOString().slice(0, 10);
+}
+
+export function TransactionForm({
+  categories,
+  open,
+  onOpenChange,
+}: TransactionFormProps) {
+  const [transactionType, setTransactionType] =
+    useState<Category['category_type']>('expense');
+  const [amount, setAmount] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [transactionDate, setTransactionDate] = useState(getLocalDateInputValue);
+  const [description, setDescription] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
+
+  const availableCategories = categories.filter(
+    (category) => category.category_type === transactionType,
+  );
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && isLoading) return;
+    onOpenChange(nextOpen);
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+
+    const validation = transactionSchema.safeParse({
+      transaction_type: transactionType,
+      amount,
+      category_id: categoryId,
+      transaction_date: transactionDate,
+      description,
+    });
+
+    if (!validation.success) {
+      setError(validation.error.issues[0]?.message ?? 'Dados inválidos.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+
+      if (userError || !userData.user) {
+        throw new Error('Você precisa estar autenticado para registrar uma transação.');
+      }
+
+      const { error: insertError } = await supabase.from('transactions').insert({
+        user_id: userData.user.id,
+        transaction_type: validation.data.transaction_type,
+        amount: validation.data.amount,
+        category_id: validation.data.category_id,
+        transaction_date: validation.data.transaction_date,
+        description: validation.data.description,
+      });
+
+      if (insertError) throw new Error(insertError.message);
+
+      onOpenChange(false);
+      router.refresh();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível registrar a transação.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] transition-opacity data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
+        <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border bg-background p-6 shadow-xl outline-none">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Dialog.Title className="text-xl font-semibold">
+                Nova transação
+              </Dialog.Title>
+              <Dialog.Description className="text-sm text-muted-foreground">
+                Registre uma receita ou despesa.
+              </Dialog.Description>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Fechar formulário"
+              onClick={() => handleOpenChange(false)}
+              disabled={isLoading}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid gap-2">
+              <Label htmlFor="transaction-type">Tipo</Label>
+              <select
+                id="transaction-type"
+                className={selectClassName}
+                value={transactionType}
+                onChange={(event) => {
+                  setTransactionType(event.target.value as Category['category_type']);
+                  setCategoryId('');
+                  setError(null);
+                }}
+                disabled={isLoading}
+              >
+                <option value="expense">Despesa</option>
+                <option value="income">Receita</option>
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transaction-amount">Valor</Label>
+              <Input
+                id="transaction-amount"
+                type="number"
+                inputMode="decimal"
+                min="0.01"
+                max="9999999999.99"
+                step="0.01"
+                placeholder="0,00"
+                value={amount}
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={isLoading}
+                required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transaction-category">Categoria</Label>
+              <select
+                id="transaction-category"
+                className={selectClassName}
+                value={categoryId}
+                onChange={(event) => {
+                  setCategoryId(event.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={isLoading || availableCategories.length === 0}
+                required
+              >
+                <option value="" disabled>
+                  Selecione uma categoria
+                </option>
+                {availableCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+              {availableCategories.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma categoria deste tipo.{' '}
+                  <Link
+                    href="/categories"
+                    className="font-medium text-primary underline underline-offset-4"
+                    onClick={() => handleOpenChange(false)}
+                  >
+                    Criar categoria
+                  </Link>
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transaction-date">Data</Label>
+              <Input
+                id="transaction-date"
+                type="date"
+                value={transactionDate}
+                onChange={(event) => {
+                  setTransactionDate(event.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={isLoading}
+                required
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transaction-description">
+                Descrição <span className="font-normal text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input
+                id="transaction-description"
+                maxLength={500}
+                placeholder="Ex: Compra no supermercado"
+                value={description}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  if (error) setError(null);
+                }}
+                disabled={isLoading}
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="text-sm font-medium text-destructive">
+                {error}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleOpenChange(false)}
+                disabled={isLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading || availableCategories.length === 0}
+              >
+                {isLoading ? 'Salvando...' : 'Registrar transação'}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
