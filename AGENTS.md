@@ -1,0 +1,48 @@
+# Diretrizes do projeto
+
+## Projeto e comandos
+
+Aplicação web Next.js com App Router, TypeScript, Tailwind CSS, componentes shadcn/ui e Supabase Auth/Database. Use `pnpm` (versão definida no `package.json` e no lockfile).
+
+Scripts disponíveis em `package.json`:
+
+- `pnpm dev`: desenvolvimento.
+- `pnpm lint`: ESLint.
+- `pnpm typecheck`: TypeScript sem gerar arquivos.
+- `pnpm check`: lint e typecheck.
+- `pnpm build`: build de produção.
+- `pnpm start`: servidor de produção após o build.
+
+Não há testes automatizados nem script `test`. Não invente resultados de testes nem instale ferramentas sem autorização. Há um `.prettierrc`, mas não há dependência ou script Prettier declarado; não presuma que exista um comando de formatação.
+
+## Organização
+
+- `src/app/`: rotas, layouts e arquivos especiais do Next.js. As rotas estão agrupadas em `(public)`, `(auth)` e `(dashboard)`; mantenha páginas focadas em composição e carregamento da rota.
+- `src/features/`: código específico por domínio. Os domínios existentes são `auth` e `categories`; mantenha componentes e schemas específicos junto à feature.
+- `src/components/layout/`: componentes compartilhados de layout; `src/components/ui/`: componentes-base shadcn/ui.
+- `src/lib/`: utilitários, validação de ambiente e integrações compartilhadas. Em `src/lib/supabase/`, `client.ts` é para o navegador, `server.ts` para servidor e `proxy.ts` para atualização de sessão.
+- `src/proxy.ts`: proxy do Next.js que conecta a atualização de sessão às requisições e aplica as regras de acesso.
+- `src/types/`: tipos compartilhados, incluindo os tipos do banco em `database.types.ts`.
+- `supabase/migrations/`: migrations SQL; `supabase/seed.sql`: dados de seed local.
+- `public/`: arquivos estáticos.
+
+Antes de criar arquivos ou abstrações, confira exemplos existentes e amplie a estrutura somente quando a funcionalidade justificar.
+
+## Padrões de implementação
+
+- Use TypeScript estrito (`strict` no `tsconfig.json`) e o alias `@/*` para imports de `src/`.
+- Prefira Server Components. Use `"use client"` quando houver estado, eventos ou APIs de navegador; escolha o cliente Supabase conforme o ambiente e não importe código de servidor no navegador.
+- Valide entradas com Zod e mantenha schemas específicos junto à feature. Para dados de usuário, trate erros de validação e de operações explicitamente.
+- Use `kebab-case` nos nomes de arquivos, `camelCase` em funções e variáveis e `PascalCase` em componentes e tipos. Respeite os nomes especiais exigidos pelo App Router e use `snake_case` para identificadores SQL conforme o schema existente.
+- Reutilize Tailwind CSS e os componentes em `src/components/ui/`. Siga ESLint, `tsconfig.json` e as preferências de formatação em `.prettierrc`.
+- Ao alterar o schema, crie uma nova migration sem editar migrations existentes e mantenha `src/types/database.types.ts` sincronizado. Preserve RLS e as políticas de acesso aos dados.
+- Não exponha credenciais privadas, chaves `service_role` ou outros segredos no cliente. Não altere arquivos de ambiente nem execute operações destrutivas ou em bancos remotos sem autorização explícita.
+- Nunca instale, remova ou atualize dependências sem autorização explícita. Não altere manualmente o lockfile nem troque o gerenciador de pacotes.
+- Nunca edite, exclua ou reescreva migrations existentes. Toda alteração necessária no schema deve ser registrada em uma nova migration.
+- Ao alterar o banco, avalie o impacto em RLS, políticas de acesso e isolamento dos dados de cada usuário. Não desative proteções para contornar erros.
+- Não faça alterações fora do escopo solicitado sem necessidade justificada. Antes de criar abstrações ou reorganizar arquivos, verifique se a mudança é realmente necessária.
+
+## Verificação
+
+Execute `pnpm check` antes de concluir alterações e corrija problemas introduzidos por elas. Execute também `pnpm build` quando mudanças em rotas, layouts, integrações ou configurações puderem afetar o build. Informe as verificações executadas e seus resultados.
+Se `pnpm check` falhar, analise os erros e corrija os que forem causados pelas alterações realizadas. Não esconda falhas preexistentes nem afirme que as verificações passaram sem executá-las. Se não for possível concluir uma verificação, informe o motivo.

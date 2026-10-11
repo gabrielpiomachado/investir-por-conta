@@ -1,9 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { CategoryForm } from '@/features/categories/components/category-form';
-
-function formatCategoryType(type: 'income' | 'expense') {
-  return type === 'income' ? 'Receita' : 'Despesa';
-}
+import { CategoriesManager } from '@/features/categories/components/categories-manager';
 
 export default async function CategoriesPage() {
   const supabase = await createClient();
@@ -40,69 +36,5 @@ export default async function CategoriesPage() {
     );
   }
 
-  const incomeCategories =
-    categories?.filter((category) => category.category_type === 'income') ?? [];
-  const expenseCategories =
-    categories?.filter((category) => category.category_type === 'expense') ??
-    [];
-
-  return (
-    <div className="space-y-8 p-6">
-      <div>
-        <h1 className="text-3xl font-semibold">Categorias</h1>
-      </div>
-
-      <CategoryForm />
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <section className="rounded-lg border bg-card p-4 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-green-600">Receitas</h2>
-
-          {incomeCategories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma categoria de receita cadastrada.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {incomeCategories.map((category) => (
-                <li
-                  key={category.id}
-                  className="flex items-center justify-between rounded-md border p-3"
-                >
-                  <span>{category.name}</span>
-                  <span className="text-xs uppercase text-green-600">
-                    {formatCategoryType(category.category_type)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="rounded-lg border bg-card p-4 shadow-sm">
-          <h2 className="mb-4 text-lg font-medium text-red-600">Despesas</h2>
-
-          {expenseCategories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma categoria de despesa cadastrada.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {expenseCategories.map((category) => (
-                <li
-                  key={category.id}
-                  className="flex items-center justify-between rounded-md border p-3"
-                >
-                  <span>{category.name}</span>
-                  <span className="text-xs uppercase text-red-600">
-                    {formatCategoryType(category.category_type)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </div>
-  );
+  return <CategoriesManager categories={categories ?? []} />;
 }
