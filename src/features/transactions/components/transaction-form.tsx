@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import { transactionSchema } from '../schemas/transaction.schema';
 import type { Category } from '@/features/categories/components/category-form';
 
@@ -36,7 +37,9 @@ export function TransactionForm({
     useState<Category['category_type']>('expense');
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [transactionDate, setTransactionDate] = useState(getLocalDateInputValue);
+  const [transactionDate, setTransactionDate] = useState(
+    getLocalDateInputValue,
+  );
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,23 +75,31 @@ export function TransactionForm({
 
     try {
       const supabase = createClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
 
       if (userError || !userData.user) {
-        throw new Error('Você precisa estar autenticado para registrar uma transação.');
+        throw new Error(
+          'Você precisa estar autenticado para registrar uma transação.',
+        );
       }
 
-      const { error: insertError } = await supabase.from('transactions').insert({
-        user_id: userData.user.id,
-        transaction_type: validation.data.transaction_type,
-        amount: validation.data.amount,
-        category_id: validation.data.category_id,
-        transaction_date: validation.data.transaction_date,
-        description: validation.data.description,
-      });
+      const { error: insertError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userData.user.id,
+          transaction_type: validation.data.transaction_type,
+          amount: validation.data.amount,
+          category_id: validation.data.category_id,
+          transaction_date: validation.data.transaction_date,
+          description: validation.data.description,
+        });
 
       if (insertError) throw new Error(insertError.message);
 
+      if (validation.data.transaction_type === 'expense') {
+        notifyBudgetActivity('check');
+      }
       onOpenChange(false);
       router.refresh();
     } catch (err: unknown) {
@@ -136,7 +147,9 @@ export function TransactionForm({
                 className={selectClassName}
                 value={transactionType}
                 onChange={(event) => {
-                  setTransactionType(event.target.value as Category['category_type']);
+                  setTransactionType(
+                    event.target.value as Category['category_type'],
+                  );
                   setCategoryId('');
                   setError(null);
                 }}
@@ -220,7 +233,10 @@ export function TransactionForm({
 
             <div className="grid gap-2">
               <Label htmlFor="transaction-description">
-                Descrição <span className="font-normal text-muted-foreground">(opcional)</span>
+                Descrição{' '}
+                <span className="font-normal text-muted-foreground">
+                  (opcional)
+                </span>
               </Label>
               <Input
                 id="transaction-description"

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import type { Database } from '@/types/database.types';
 import { recurrenceSchema } from '../schemas/recurrence.schema';
 
@@ -134,11 +135,11 @@ export function RecurrenceForm({
       const anchorDay = Number(input.start_date.slice(8, 10));
 
       if (recurrence) {
-        const { error: generationError } = await supabase.rpc(
-          'generate_due_recurring_transactions',
-        );
+        const { data: generatedCount, error: generationError } =
+          await supabase.rpc('generate_due_recurring_transactions');
 
         if (generationError) throw new Error(generationError.message);
+        if (generatedCount > 0) notifyBudgetActivity('check');
 
         const { data: currentRecurrence, error: currentError } = await supabase
           .from('recurring_transactions')
@@ -191,6 +192,12 @@ export function RecurrenceForm({
           });
 
         if (insertError) throw new Error(insertError.message);
+
+        const { data: generatedCount, error: generationError } =
+          await supabase.rpc('generate_due_recurring_transactions');
+
+        if (generationError) throw new Error(generationError.message);
+        if (generatedCount > 0) notifyBudgetActivity('check');
       }
 
       onOpenChange(false);

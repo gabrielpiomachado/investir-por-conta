@@ -34,6 +34,47 @@ export type Database = {
   };
   public: {
     Tables: {
+      budgets: {
+        Row: {
+          alert_thresholds: number[];
+          amount: number;
+          category_id: string;
+          created_at: string;
+          id: string;
+          period: Database['public']['Enums']['budget_period'];
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          alert_thresholds?: number[];
+          amount: number;
+          category_id: string;
+          created_at?: string;
+          id?: string;
+          period: Database['public']['Enums']['budget_period'];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          alert_thresholds?: number[];
+          amount?: number;
+          category_id?: string;
+          created_at?: string;
+          id?: string;
+          period?: Database['public']['Enums']['budget_period'];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'budgets_category_id_fkey';
+            columns: ['category_id'];
+            isOneToOne: false;
+            referencedRelation: 'categories';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       categories: {
         Row: {
           category_type: Database['public']['Enums']['category_type'];
@@ -182,6 +223,7 @@ export type Database = {
       };
     };
     Enums: {
+      budget_period: 'monthly' | 'annual';
       category_type: 'income' | 'expense';
     };
     CompositeTypes: {

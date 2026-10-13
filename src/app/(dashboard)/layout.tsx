@@ -1,5 +1,6 @@
 import { DashboardHeader } from '@/components/layout/dashboard-header';
 import { Footer } from '@/components/layout/footer';
+import { BudgetAlertCenter } from '@/features/budgets/components/budget-alert-center';
 
 export default function PublicLayout({
   children,
@@ -11,6 +12,7 @@ export default function PublicLayout({
       <DashboardHeader />
       <main className="flex-1">{children}</main>
       <Footer />
+      <BudgetAlertCenter />
     </div>
   );
 }
