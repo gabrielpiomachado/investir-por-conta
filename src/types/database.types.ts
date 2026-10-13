@@ -75,6 +75,80 @@ export type Database = {
           },
         ];
       };
+      goals: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          current_amount: number;
+          id: string;
+          name: string;
+          status: 'active' | 'completed';
+          target_amount: number;
+          target_date: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          current_amount?: number;
+          id?: string;
+          name: string;
+          status?: 'active' | 'completed';
+          target_amount: number;
+          target_date?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          current_amount?: number;
+          id?: string;
+          name?: string;
+          status?: 'active' | 'completed';
+          target_amount?: number;
+          target_date?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      goal_contributions: {
+        Row: {
+          amount: number;
+          created_at: string;
+          description: string | null;
+          goal_id: string;
+          id: string;
+          user_id: string;
+        };
+        Insert: {
+          amount: number;
+          created_at?: string;
+          description?: string | null;
+          goal_id: string;
+          id?: string;
+          user_id?: string;
+        };
+        Update: {
+          amount?: number;
+          created_at?: string;
+          description?: string | null;
+          goal_id?: string;
+          id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'goal_contributions_goal_owner_fkey';
+            columns: ['goal_id', 'user_id'];
+            isOneToOne: false;
+            referencedRelation: 'goals';
+            referencedColumns: ['id', 'user_id'];
+          },
+        ];
+      };
       categories: {
         Row: {
           category_type: Database['public']['Enums']['category_type'];
@@ -217,9 +291,42 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      cancel_goal: {
+        Args: { p_goal_id: string };
+        Returns: undefined;
+      };
+      contribute_to_goal: {
+        Args: {
+          p_amount: number;
+          p_description?: string | null;
+          p_goal_id: string;
+        };
+        Returns: undefined;
+      };
+      create_goal: {
+        Args: {
+          p_name: string;
+          p_target_amount: number;
+          p_target_date?: string | null;
+        };
+        Returns: string;
+      };
+      get_consolidated_balance: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
       generate_due_recurring_transactions: {
         Args: Record<PropertyKey, never>;
         Returns: number;
+      };
+      update_goal: {
+        Args: {
+          p_goal_id: string;
+          p_name: string;
+          p_target_amount: number;
+          p_target_date?: string | null;
+        };
+        Returns: undefined;
       };
     };
     Enums: {
