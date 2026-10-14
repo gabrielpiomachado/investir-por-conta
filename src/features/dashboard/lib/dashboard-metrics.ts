@@ -2,8 +2,13 @@ import type { Database } from '@/types/database.types';
 
 export type DashboardTransaction = Pick<
   Database['public']['Tables']['transactions']['Row'],
-  'amount' | 'transaction_date' | 'transaction_type'
+  'amount' | 'category_id' | 'transaction_date' | 'transaction_type'
 >;
+
+export type CategoryTotal = {
+  categoryId: string;
+  amount: number;
+};
 
 export type MonthlyTotals = {
   income: number;
@@ -68,6 +73,33 @@ export function getMonthlyTotals(
   );
 
   return { ...totals, net: totals.income - totals.expenses };
+}
+
+export function getMonthlyCategoryTotals(
+  transactions: DashboardTransaction[],
+  month: string,
+  transactionType: DashboardTransaction['transaction_type'],
+): CategoryTotal[] {
+  const totals = new Map<string, number>();
+
+  transactions.forEach((transaction) => {
+    if (
+      transaction.transaction_type !== transactionType ||
+      !transaction.transaction_date.startsWith(`${month}-`)
+    ) {
+      return;
+    }
+
+    totals.set(
+      transaction.category_id,
+      (totals.get(transaction.category_id) ?? 0) + transaction.amount,
+    );
+  });
+
+  return Array.from(totals, ([categoryId, amount]) => ({
+    categoryId,
+    amount,
+  })).sort((a, b) => b.amount - a.amount);
 }
 
 export function getMonthlyVariation(currentNet: number, previousNet: number) {
