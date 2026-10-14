@@ -114,7 +114,9 @@ export function BudgetsManager({
         .select('id')
         .single();
 
-      if (removeError) throw new Error(removeError.message);
+      if (removeError) {
+        throw new Error('Não foi possível excluir o orçamento.');
+      }
       notifyBudgetActivity('reset');
       setDeletingBudget(null);
       router.refresh();

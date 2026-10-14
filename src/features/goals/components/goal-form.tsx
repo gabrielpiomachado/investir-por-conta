@@ -65,7 +65,9 @@ export function GoalForm({ goal, open, onOpenChange }: GoalFormProps) {
             p_target_date: validation.data.target_date,
           });
 
-      if (result.error) throw new Error(result.error.message);
+      if (result.error) {
+        throw new Error('Não foi possível salvar a meta. Tente novamente.');
+      }
 
       onOpenChange(false);
       router.refresh();

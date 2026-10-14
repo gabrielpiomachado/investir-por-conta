@@ -140,8 +140,7 @@ function CategoryBreakdownCard({
         ...category,
         percentage,
         offset:
-          (previousSegment?.offset ?? 0) +
-          (previousSegment?.percentage ?? 0),
+          (previousSegment?.offset ?? 0) + (previousSegment?.percentage ?? 0),
       },
     ];
   }, []);
@@ -210,7 +209,9 @@ function CategoryBreakdownCard({
                       className="mt-0.5 size-2.5 shrink-0 rounded-sm"
                       style={{
                         backgroundColor:
-                          categoryChartColors[index % categoryChartColors.length],
+                          categoryChartColors[
+                            index % categoryChartColors.length
+                          ],
                       }}
                     />
                     <div className="min-w-0 flex-1">
@@ -331,7 +332,7 @@ export function DashboardOverview({
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Visão financeira</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Visão geral</h1>
         </div>
         <div className="flex items-center justify-between gap-2 sm:justify-end">
           <Button

@@ -106,7 +106,9 @@ export function BudgetForm({
           .select('id')
           .single();
 
-        if (updateError) throw new Error(updateError.message);
+        if (updateError) {
+          throw new Error('Não foi possível salvar o orçamento.');
+        }
       } else {
         const { error: insertError } = await supabase.from('budgets').insert({
           user_id: userData.user.id,
@@ -120,7 +122,7 @@ export function BudgetForm({
           if (insertError.code === '23505') {
             throw new Error('Esta categoria já possui um orçamento.');
           }
-          throw new Error(insertError.message);
+          throw new Error('Não foi possível salvar o orçamento.');
         }
       }
 

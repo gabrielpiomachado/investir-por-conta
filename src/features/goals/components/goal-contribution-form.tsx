@@ -82,7 +82,7 @@ export function GoalContributionForm({
         throw new Error(
           contributionError.message === 'GOAL_NOT_FOUND'
             ? 'Esta meta não está mais disponível.'
-            : contributionError.message,
+            : 'Não foi possível registrar o aporte. Tente novamente.',
         );
       }
 

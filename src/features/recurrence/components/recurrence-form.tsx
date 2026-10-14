@@ -138,7 +138,9 @@ export function RecurrenceForm({
         const { data: generatedCount, error: generationError } =
           await supabase.rpc('generate_due_recurring_transactions');
 
-        if (generationError) throw new Error(generationError.message);
+        if (generationError) {
+          throw new Error('Não foi possível salvar a recorrência.');
+        }
         if (generatedCount > 0) notifyBudgetActivity('check');
 
         const { data: currentRecurrence, error: currentError } = await supabase
@@ -149,7 +151,9 @@ export function RecurrenceForm({
           .eq('is_active', true)
           .single();
 
-        if (currentError) throw new Error(currentError.message);
+        if (currentError) {
+          throw new Error('Não foi possível salvar a recorrência.');
+        }
 
         const nextRunDate = getNextRunDate(
           input.frequency,
@@ -175,7 +179,9 @@ export function RecurrenceForm({
           .select('id')
           .single();
 
-        if (updateError) throw new Error(updateError.message);
+        if (updateError) {
+          throw new Error('Não foi possível salvar a recorrência.');
+        }
       } else {
         const { error: insertError } = await supabase
           .from('recurring_transactions')
@@ -191,12 +197,16 @@ export function RecurrenceForm({
             description: input.description,
           });
 
-        if (insertError) throw new Error(insertError.message);
+        if (insertError) {
+          throw new Error('Não foi possível salvar a recorrência.');
+        }
 
         const { data: generatedCount, error: generationError } =
           await supabase.rpc('generate_due_recurring_transactions');
 
-        if (generationError) throw new Error(generationError.message);
+        if (generationError) {
+          throw new Error('Não foi possível salvar a recorrência.');
+        }
         if (generatedCount > 0) notifyBudgetActivity('check');
       }
 

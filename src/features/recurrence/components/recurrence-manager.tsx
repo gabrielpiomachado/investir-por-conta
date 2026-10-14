@@ -93,7 +93,9 @@ export function RecurrenceManager({
         .select('id')
         .single();
 
-      if (updateError) throw new Error(updateError.message);
+      if (updateError) {
+        throw new Error('Não foi possível cancelar a recorrência.');
+      }
 
       setCancelingRecurrence(null);
       router.refresh();
@@ -243,7 +245,7 @@ export function RecurrenceManager({
                           </p>
                           <p className="mt-1 font-medium">
                             {frequencyLabels[recurrence.frequency] ??
-                              recurrence.frequency}
+                              'Personalizada'}
                           </p>
                         </div>
                         <div>

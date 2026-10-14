@@ -50,18 +50,14 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
       const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
-        throw error;
+        throw new Error('Não foi possível alterar sua senha.');
       }
 
       setPassword('');
       setPasswordConfirmation('');
       setPasswordMessage('Senha alterada com sucesso.');
-    } catch (error) {
-      setPasswordError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível alterar sua senha.',
-      );
+    } catch {
+      setPasswordError('Não foi possível alterar sua senha.');
     } finally {
       setIsSavingPassword(false);
     }
@@ -87,12 +83,8 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
       link.download = `investir-por-conta-dados-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch (error) {
-      setExportError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível exportar seus dados.',
-      );
+    } catch {
+      setExportError('Não foi possível exportar seus dados.');
     } finally {
       setIsExporting(false);
     }

@@ -95,7 +95,9 @@ export function TransactionForm({
           description: validation.data.description,
         });
 
-      if (insertError) throw new Error(insertError.message);
+      if (insertError) {
+        throw new Error('Não foi possível registrar a transação.');
+      }
 
       if (validation.data.transaction_type === 'expense') {
         notifyBudgetActivity('check');

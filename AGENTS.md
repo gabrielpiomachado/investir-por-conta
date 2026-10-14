@@ -46,3 +46,13 @@ Antes de criar arquivos ou abstrações, confira exemplos existentes e amplie a 
 
 Execute `pnpm check` antes de concluir alterações e corrija problemas introduzidos por elas. Execute também `pnpm build` quando mudanças em rotas, layouts, integrações ou configurações puderem afetar o build. Informe as verificações executadas e seus resultados.
 Se `pnpm check` falhar, analise os erros e corrija os que forem causados pelas alterações realizadas. Não esconda falhas preexistentes nem afirme que as verificações passaram sem executá-las. Se não for possível concluir uma verificação, informe o motivo.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

@@ -19,7 +19,7 @@ export function PublicHeader() {
 
         <nav
           aria-label="Navegação principal"
-          className="order-3 flex w-full flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground md:order-none md:w-auto md:flex-1 md:gap-7 md:text-sm"
+          className="order-3 flex w-full flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground md:order-0 md:w-auto md:flex-1 md:gap-7 md:text-sm"
         >
           <Link
             href="/"

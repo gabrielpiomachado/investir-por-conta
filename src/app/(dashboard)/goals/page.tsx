@@ -20,14 +20,13 @@ export default async function GoalsPage() {
   let availableBalance: number;
   try {
     availableBalance = await getFinancialBalance();
-  } catch (error: unknown) {
+  } catch {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-semibold">Metas financeiras</h1>
         <p role="alert" className="mt-4 text-sm text-destructive">
-          {error instanceof Error
-            ? error.message
-            : 'Não foi possível carregar o saldo consolidado.'}
+          Não foi possível carregar o saldo consolidado. Tente novamente mais
+          tarde.
         </p>
       </div>
     );

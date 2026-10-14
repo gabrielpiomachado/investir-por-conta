@@ -31,9 +31,9 @@ export function CategoryForm({
   onOpenChange,
 }: CategoryFormProps) {
   const [name, setName] = useState(category?.name ?? '');
-  const [categoryType, setCategoryType] = useState<
-    Category['category_type']
-  >(category?.category_type ?? initialCategoryType);
+  const [categoryType, setCategoryType] = useState<Category['category_type']>(
+    category?.category_type ?? initialCategoryType,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -62,10 +62,13 @@ export function CategoryForm({
 
     try {
       const supabase = createClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
 
       if (userError || !userData.user) {
-        throw new Error('Você precisa estar autenticado para salvar uma categoria.');
+        throw new Error(
+          'Você precisa estar autenticado para salvar uma categoria.',
+        );
       }
 
       if (category) {
@@ -81,20 +84,22 @@ export function CategoryForm({
           if (updateError.code === '23505') {
             throw new Error('Você já possui uma categoria com este nome.');
           }
-          throw new Error(updateError.message);
+          throw new Error('Não foi possível salvar a categoria.');
         }
       } else {
-        const { error: insertError } = await supabase.from('categories').insert({
-          name: validation.data.name,
-          category_type: validation.data.category_type,
-          user_id: userData.user.id,
-        });
+        const { error: insertError } = await supabase
+          .from('categories')
+          .insert({
+            name: validation.data.name,
+            category_type: validation.data.category_type,
+            user_id: userData.user.id,
+          });
 
         if (insertError) {
           if (insertError.code === '23505') {
             throw new Error('Você já possui uma categoria com este nome.');
           }
-          throw new Error(insertError.message);
+          throw new Error('Não foi possível salvar a categoria.');
         }
       }
 

@@ -23,9 +23,9 @@ export default async function DashboardPage({
   if (userError || !user) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-semibold">Dashboard</h1>
+        <h1 className="text-3xl font-semibold">Visão geral</h1>
         <p className="mt-4 text-sm text-muted-foreground">
-          Faça login para visualizar seu dashboard.
+          Faça login para visualizar sua visão geral financeira.
         </p>
       </div>
     );
@@ -34,14 +34,13 @@ export default async function DashboardPage({
   let balance: number;
   try {
     balance = await getFinancialBalance();
-  } catch (error: unknown) {
+  } catch {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-semibold">Visão geral</h1>
         <p role="alert" className="mt-4 text-sm text-red-500">
-          {error instanceof Error
-            ? error.message
-            : 'Não foi possível carregar o saldo consolidado.'}
+          Não foi possível carregar o saldo consolidado. Tente novamente mais
+          tarde.
         </p>
       </div>
     );
@@ -84,7 +83,7 @@ export default async function DashboardPage({
   ) {
     return (
       <div className="p-6">
-        <h1 className="text-3xl font-semibold">Dashboard</h1>
+        <h1 className="text-3xl font-semibold">Visão geral</h1>
         <p role="alert" className="mt-4 text-sm text-destructive">
           Não foi possível carregar seu resumo financeiro. Tente novamente mais
           tarde.

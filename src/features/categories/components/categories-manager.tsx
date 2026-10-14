@@ -54,10 +54,13 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
 
     try {
       const supabase = createClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
 
       if (userError || !userData.user) {
-        throw new Error('Você precisa estar autenticado para excluir uma categoria.');
+        throw new Error(
+          'Você precisa estar autenticado para excluir uma categoria.',
+        );
       }
 
       const { error: deleteError } = await supabase
@@ -68,7 +71,9 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
         .select('id')
         .single();
 
-      if (deleteError) throw new Error(deleteError.message);
+      if (deleteError) {
+        throw new Error('Não foi possível excluir a categoria.');
+      }
 
       setDeletingCategory(null);
       router.refresh();
@@ -87,7 +92,9 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
     <div className="space-y-8 p-6">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-primary">Organização financeira</p>
+          <p className="text-sm font-medium text-primary">
+            Organização financeira
+          </p>
           <h1 className="text-3xl font-semibold tracking-tight">Categorias</h1>
           <p className="max-w-xl text-sm text-muted-foreground">
             Organize suas receitas e despesas com categorias personalizadas.
@@ -127,7 +134,11 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
                 <ArrowDownRight aria-hidden="true" className="size-4" />
                 Despesas
                 <span className="text-xs opacity-70">
-                  {categories.filter((category) => category.category_type === 'expense').length}
+                  {
+                    categories.filter(
+                      (category) => category.category_type === 'expense',
+                    ).length
+                  }
                 </span>
               </button>
               <button
@@ -144,7 +155,11 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
                 <ArrowUpRight aria-hidden="true" className="size-4" />
                 Receitas
                 <span className="text-xs opacity-70">
-                  {categories.filter((category) => category.category_type === 'income').length}
+                  {
+                    categories.filter(
+                      (category) => category.category_type === 'income',
+                    ).length
+                  }
                 </span>
               </button>
             </div>
@@ -164,9 +179,12 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
               >
                 <FolderOpen aria-hidden="true" className="size-5" />
               </div>
-              <h2 className="font-medium">Nenhuma categoria de {typeLabel.toLowerCase()}</h2>
+              <h2 className="font-medium">
+                Nenhuma categoria de {typeLabel.toLowerCase()}
+              </h2>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Adicione sua primeira categoria para manter suas finanças organizadas.
+                Adicione sua primeira categoria para manter suas finanças
+                organizadas.
               </p>
               <Button
                 variant="outline"
@@ -282,7 +300,10 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
             </div>
 
             {deleteError && (
-              <p role="alert" className="mb-4 text-sm font-medium text-destructive">
+              <p
+                role="alert"
+                className="mb-4 text-sm font-medium text-destructive"
+              >
                 {deleteError}
               </p>
             )}

@@ -83,7 +83,7 @@ export function GoalsManager({ goals, availableBalance }: GoalsManagerProps) {
         throw new Error(
           error.message === 'GOAL_NOT_FOUND'
             ? 'Esta meta não está mais disponível.'
-            : error.message,
+            : 'Não foi possível excluir a meta. Tente novamente.',
         );
       }
 
