@@ -150,7 +150,7 @@ export function BudgetAlertCenter() {
     <div
       aria-live="polite"
       aria-relevant="additions"
-      className="pointer-events-none fixed bottom-4 right-4 z-[70] grid w-[calc(100%-2rem)] max-w-sm gap-3"
+      className="pointer-events-none fixed bottom-4 right-4 z-70 grid w-[calc(100%-2rem)] max-w-sm gap-3"
     >
       {alerts.map((alert) => (
         <div
