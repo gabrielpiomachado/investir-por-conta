@@ -11,12 +11,14 @@ export async function AuthButton() {
   const user = data?.claims;
 
   return user ? (
-    <div className="flex items-center gap-4">
-      Hey, {user.email}!
+    <div className="flex min-w-0 items-center gap-3 text-xs md:text-sm">
+      <span className="max-w-32 truncate text-muted-foreground md:max-w-48">
+        Olá, {user.email}
+      </span>
       <SignOutButton />
     </div>
   ) : (
-    <div className="flex gap-2">
+    <div className="flex shrink-0 gap-2">
       <Link
         href="/sign-in"
         className={buttonVariants({
@@ -24,7 +26,7 @@ export async function AuthButton() {
           variant: 'outline',
         })}
       >
-        Sign-in
+        Entrar
       </Link>
       <Link
         href="/sign-up"
@@ -33,7 +35,7 @@ export async function AuthButton() {
           variant: 'default',
         })}
       >
-        Sign up
+        Criar conta
       </Link>
     </div>
   );

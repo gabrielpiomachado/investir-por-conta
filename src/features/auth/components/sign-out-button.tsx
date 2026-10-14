@@ -13,5 +13,5 @@ export function SignOutButton() {
     router.push('/sign-in');
   };
 
-  return <Button onClick={signOut}>Sign Out</Button>;
+  return <Button onClick={signOut}>Sair</Button>;
 }
