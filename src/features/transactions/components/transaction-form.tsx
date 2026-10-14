@@ -12,9 +12,22 @@ import { createClient } from '@/lib/supabase/client';
 import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import { transactionSchema } from '../schemas/transaction.schema';
 import type { Category } from '@/features/categories/components/category-form';
+import type { Database } from '@/types/database.types';
+
+export type TransactionRecord = Pick<
+  Database['public']['Tables']['transactions']['Row'],
+  | 'id'
+  | 'category_id'
+  | 'transaction_type'
+  | 'amount'
+  | 'transaction_date'
+  | 'description'
+  | 'recurring_transaction_id'
+>;
 
 type TransactionFormProps = {
   categories: Category[];
+  transaction?: TransactionRecord;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -30,20 +43,28 @@ function getLocalDateInputValue() {
 
 export function TransactionForm({
   categories,
+  transaction,
   open,
   onOpenChange,
 }: TransactionFormProps) {
   const [transactionType, setTransactionType] =
-    useState<Category['category_type']>('expense');
-  const [amount, setAmount] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [transactionDate, setTransactionDate] = useState(
-    getLocalDateInputValue,
+    useState<Category['category_type']>(
+      transaction?.transaction_type ?? 'expense',
+    );
+  const [amount, setAmount] = useState(
+    transaction ? String(transaction.amount) : '',
   );
-  const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState(transaction?.category_id ?? '');
+  const [transactionDate, setTransactionDate] = useState(
+    transaction?.transaction_date ?? getLocalDateInputValue(),
+  );
+  const [description, setDescription] = useState(
+    transaction?.description ?? '',
+  );
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const isEditing = Boolean(transaction);
 
   const availableCategories = categories.filter(
     (category) => category.category_type === transactionType,
@@ -80,26 +101,58 @@ export function TransactionForm({
 
       if (userError || !userData.user) {
         throw new Error(
-          'Você precisa estar autenticado para registrar uma transação.',
+          `Você precisa estar autenticado para ${
+            isEditing ? 'atualizar' : 'registrar'
+          } uma transação.`,
         );
       }
 
-      const { error: insertError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userData.user.id,
-          transaction_type: validation.data.transaction_type,
-          amount: validation.data.amount,
-          category_id: validation.data.category_id,
-          transaction_date: validation.data.transaction_date,
-          description: validation.data.description,
-        });
+      const transactionValues = {
+        transaction_type: validation.data.transaction_type,
+        amount: validation.data.amount,
+        category_id: validation.data.category_id,
+        transaction_date: validation.data.transaction_date,
+        description: validation.data.description,
+      };
 
-      if (insertError) {
-        throw new Error('Não foi possível registrar a transação.');
+      if (transaction) {
+        const { error: updateError } = await supabase
+          .from('transactions')
+          .update({
+            ...transactionValues,
+            ...(transaction.recurring_transaction_id
+              ? { recurrence_occurrence_date: validation.data.transaction_date }
+              : {}),
+          })
+          .eq('id', transaction.id)
+          .eq('user_id', userData.user.id)
+          .select('id')
+          .single();
+
+        if (updateError) {
+          throw new Error(
+            `Não foi possível atualizar a transação: ${updateError.message}`,
+          );
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: userData.user.id,
+            ...transactionValues,
+          });
+
+        if (insertError) {
+            throw new Error(
+              `Não foi possível registrar a transação: ${insertError.message}`,
+            );
+        }
       }
 
-      if (validation.data.transaction_type === 'expense') {
+      if (
+        validation.data.transaction_type === 'expense' ||
+        transaction?.transaction_type === 'expense'
+      ) {
         notifyBudgetActivity('check');
       }
       onOpenChange(false);
@@ -108,7 +161,9 @@ export function TransactionForm({
       setError(
         err instanceof Error
           ? err.message
-          : 'Não foi possível registrar a transação.',
+          : `Não foi possível ${
+              isEditing ? 'atualizar' : 'registrar'
+            } a transação.`,
       );
     } finally {
       setIsLoading(false);
@@ -123,10 +178,12 @@ export function TransactionForm({
           <div className="mb-6 flex items-start justify-between gap-4">
             <div className="space-y-1">
               <Dialog.Title className="text-xl font-semibold">
-                Nova transação
+                {isEditing ? 'Editar transação' : 'Nova transação'}
               </Dialog.Title>
               <Dialog.Description className="text-sm text-muted-foreground">
-                Registre uma receita ou despesa.
+                {isEditing
+                  ? 'Altere os dados da receita ou despesa.'
+                  : 'Registre uma receita ou despesa.'}
               </Dialog.Description>
             </div>
             <Button
@@ -272,7 +329,11 @@ export function TransactionForm({
                 type="submit"
                 disabled={isLoading || availableCategories.length === 0}
               >
-                {isLoading ? 'Salvando...' : 'Registrar transação'}
+                {isLoading
+                  ? 'Salvando...'
+                  : isEditing
+                    ? 'Salvar alterações'
+                    : 'Registrar transação'}
               </Button>
             </div>
           </form>

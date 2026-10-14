@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Dialog } from '@base-ui/react/dialog';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -8,9 +10,11 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderOpen,
+  Pencil,
   Plus,
   Search,
   SlidersHorizontal,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,18 +27,11 @@ import {
 } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import type { Category } from '@/features/categories/components/category-form';
-import type { Database } from '@/types/database.types';
-import { TransactionForm } from './transaction-form';
+import { createClient } from '@/lib/supabase/client';
+import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
+import { TransactionForm, type TransactionRecord } from './transaction-form';
 
-type Transaction = Pick<
-  Database['public']['Tables']['transactions']['Row'],
-  | 'id'
-  | 'category_id'
-  | 'transaction_type'
-  | 'amount'
-  | 'transaction_date'
-  | 'description'
->;
+type Transaction = TransactionRecord;
 
 type TransactionsManagerProps = {
   categories: Category[];
@@ -42,6 +39,8 @@ type TransactionsManagerProps = {
 };
 
 type TypeFilter = 'all' | Category['category_type'];
+
+const TRANSACTIONS_PER_PAGE = 50;
 
 const selectClassName =
   'h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
@@ -79,6 +78,42 @@ function formatFilterDate(date: string) {
   return dateFormatter.format(new Date(year, month - 1, day, 12));
 }
 
+type TransactionActionsProps = {
+  transactionName: string;
+  onEdit: () => void;
+  onDelete: () => void;
+};
+
+function TransactionActions({
+  transactionName,
+  onEdit,
+  onDelete,
+}: TransactionActionsProps) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Editar transação ${transactionName}`}
+        onClick={onEdit}
+      >
+        <Pencil aria-hidden="true" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`Excluir transação ${transactionName}`}
+        onClick={onDelete}
+        className="text-destructive hover:text-destructive"
+      >
+        <Trash2 aria-hidden="true" />
+      </Button>
+    </div>
+  );
+}
+
 export function TransactionsManager({
   categories,
   transactions,
@@ -93,7 +128,15 @@ export function TransactionsManager({
   const [categoryId, setCategoryId] = useState('all');
   const [type, setType] = useState<TypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
+  const [deletingTransaction, setDeletingTransaction] =
+    useState<Transaction | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const router = useRouter();
 
   const filterCategories =
     type === 'all'
@@ -134,6 +177,23 @@ export function TransactionsManager({
     return true;
   });
 
+  const totalPages = Math.ceil(
+    filteredTransactions.length / TRANSACTIONS_PER_PAGE,
+  );
+  const activePage = Math.min(currentPage, Math.max(totalPages, 1));
+  const pageTransactions = filteredTransactions.slice(
+    (activePage - 1) * TRANSACTIONS_PER_PAGE,
+    activePage * TRANSACTIONS_PER_PAGE,
+  );
+  const firstTransactionOnPage =
+    filteredTransactions.length === 0
+      ? 0
+      : (activePage - 1) * TRANSACTIONS_PER_PAGE + 1;
+  const lastTransactionOnPage = Math.min(
+    activePage * TRANSACTIONS_PER_PAGE,
+    filteredTransactions.length,
+  );
+
   const totalIncome = filteredTransactions.reduce(
     (sum, transaction) =>
       transaction.transaction_type === 'income'
@@ -156,6 +216,7 @@ export function TransactionsManager({
     Boolean(normalizedSearch);
 
   const changeType = (nextType: TypeFilter) => {
+    setCurrentPage(1);
     setType(nextType);
     if (
       categoryId !== 'all' &&
@@ -168,12 +229,67 @@ export function TransactionsManager({
   };
 
   const clearFilters = () => {
+    setCurrentPage(1);
     setStartDate('');
     setEndDate('');
     setCategoryId('all');
     setType('all');
     setSearchQuery('');
   };
+
+  const handleDelete = async () => {
+    if (!deletingTransaction) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const supabase = createClient();
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
+
+      if (userError || !userData.user) {
+        throw new Error(
+          'Você precisa estar autenticado para excluir uma transação.',
+        );
+      }
+
+      const { error: deleteError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', deletingTransaction.id)
+        .eq('user_id', userData.user.id)
+        .select('id')
+        .single();
+
+      if (deleteError) {
+        throw new Error(
+          `Não foi possível excluir a transação: ${deleteError.message}`,
+        );
+      }
+
+      if (deletingTransaction.transaction_type === 'expense') {
+        notifyBudgetActivity('check');
+      }
+
+      setDeletingTransaction(null);
+      router.refresh();
+    } catch (err: unknown) {
+      setDeleteError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível excluir a transação.',
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const getTransactionName = (transaction: Transaction) =>
+    transaction.description ||
+    categories.find((category) => category.id === transaction.category_id)
+      ?.name ||
+    'sem descrição';
 
   return (
     <div className="space-y-8 p-6">
@@ -197,7 +313,7 @@ export function TransactionsManager({
             <div className="space-y-1">
               <CardTitle className="text-base">Filtros</CardTitle>
               <CardDescription>
-                Combine período e categoria para encontrar transações.
+                Combine período, tipo e categoria para encontrar transações.
               </CardDescription>
             </div>
             <Button
@@ -215,7 +331,7 @@ export function TransactionsManager({
         {isFilterOpen && (
           <CardContent
             id="transaction-filters"
-            className="grid gap-4 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto] lg:items-end"
+            className="grid gap-4 p-4 sm:grid-cols-2 sm:p-6 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto] lg:items-end"
           >
             <div className="grid gap-2">
               <Label htmlFor="filter-start-date">De</Label>
@@ -230,7 +346,10 @@ export function TransactionsManager({
                   className={`${selectClassName} pl-9`}
                   value={startDate}
                   max={endDate || undefined}
-                  onChange={(event) => setStartDate(event.target.value)}
+                  onChange={(event) => {
+                    setCurrentPage(1);
+                    setStartDate(event.target.value);
+                  }}
                 />
               </div>
             </div>
@@ -247,7 +366,10 @@ export function TransactionsManager({
                   className={`${selectClassName} pl-9`}
                   value={endDate}
                   min={startDate || undefined}
-                  onChange={(event) => setEndDate(event.target.value)}
+                  onChange={(event) => {
+                    setCurrentPage(1);
+                    setEndDate(event.target.value);
+                  }}
                 />
               </div>
             </div>
@@ -257,7 +379,10 @@ export function TransactionsManager({
                 id="filter-category"
                 className={selectClassName}
                 value={categoryId}
-                onChange={(event) => setCategoryId(event.target.value)}
+                onChange={(event) => {
+                  setCurrentPage(1);
+                  setCategoryId(event.target.value);
+                }}
               >
                 <option value="all">Todas</option>
                 {filterCategories.map((category) => (
@@ -265,6 +390,19 @@ export function TransactionsManager({
                     {category.name}
                   </option>
                 ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="filter-type">Tipo</Label>
+              <select
+                id="filter-type"
+                className={selectClassName}
+                value={type}
+                onChange={(event) => changeType(event.target.value as TypeFilter)}
+              >
+                <option value="all">Todos</option>
+                <option value="expense">Despesas</option>
+                <option value="income">Receitas</option>
               </select>
             </div>
             <Button
@@ -291,6 +429,7 @@ export function TransactionsManager({
                 variant="secondary"
                 size="sm"
                 onClick={() => {
+                  setCurrentPage(1);
                   setStartDate('');
                   setEndDate('');
                 }}
@@ -310,7 +449,10 @@ export function TransactionsManager({
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => setCategoryId('all')}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setCategoryId('all');
+                }}
                 aria-label="Remover filtro de categoria"
               >
                 <X aria-hidden="true" />
@@ -322,7 +464,7 @@ export function TransactionsManager({
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => setType('all')}
+                onClick={() => changeType('all')}
                 aria-label="Remover filtro de tipo"
               >
                 <X aria-hidden="true" />
@@ -334,7 +476,10 @@ export function TransactionsManager({
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setCurrentPage(1);
+                  setSearchQuery('');
+                }}
                 aria-label="Remover filtro de pesquisa"
               >
                 <X aria-hidden="true" />
@@ -349,7 +494,10 @@ export function TransactionsManager({
               variant="outline"
               size="icon"
               aria-label="Mês anterior"
-              onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))}
+              onClick={() => {
+                setCurrentPage(1);
+                setSelectedMonth((month) => shiftMonth(month, -1));
+              }}
             >
               <ChevronLeft aria-hidden="true" />
             </Button>
@@ -361,7 +509,10 @@ export function TransactionsManager({
               variant="outline"
               size="icon"
               aria-label="Próximo mês"
-              onClick={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+              onClick={() => {
+                setCurrentPage(1);
+                setSelectedMonth((month) => shiftMonth(month, 1));
+              }}
             >
               <ChevronRight aria-hidden="true" />
             </Button>
@@ -403,20 +554,7 @@ export function TransactionsManager({
         </Card>
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-[minmax(10rem,0.35fr)_minmax(0,1fr)]">
-        <div className="grid gap-2">
-          <Label htmlFor="transaction-type">Mostrar</Label>
-          <select
-            id="transaction-type"
-            className={selectClassName}
-            value={type}
-            onChange={(event) => changeType(event.target.value as TypeFilter)}
-          >
-            <option value="all">Todas</option>
-            <option value="expense">Despesas</option>
-            <option value="income">Receitas</option>
-          </select>
-        </div>
+      <div className="grid gap-3">
         <div className="grid gap-2">
           <Label htmlFor="transaction-search">Pesquisar</Label>
           <div className="relative">
@@ -430,7 +568,10 @@ export function TransactionsManager({
               className={`${selectClassName} pl-9`}
               placeholder="Descrição, valor ou categoria"
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => {
+                setCurrentPage(1);
+                setSearchQuery(event.target.value);
+              }}
             />
           </div>
         </div>
@@ -452,9 +593,9 @@ export function TransactionsManager({
               : 'transações encontradas'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6">
+        <CardContent className="p-0">
           {filteredTransactions.length === 0 ? (
-            <div className="flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed px-6 py-10 text-center">
+            <div className="m-4 flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed px-6 py-10 text-center sm:m-6">
               <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <FolderOpen aria-hidden="true" className="size-5" />
               </div>
@@ -488,65 +629,279 @@ export function TransactionsManager({
               )}
             </div>
           ) : (
-            <ul className="divide-y">
-              {filteredTransactions.map((transaction) => {
-                const isIncome = transaction.transaction_type === 'income';
-                const category = categories.find(
-                  (item) => item.id === transaction.category_id,
-                );
-                const Icon = isIncome ? ArrowUpRight : ArrowDownRight;
+            <>
+              <ul className="divide-y sm:hidden">
+                {pageTransactions.map((transaction) => {
+                  const isIncome = transaction.transaction_type === 'income';
+                  const category = categories.find(
+                    (item) => item.id === transaction.category_id,
+                  );
+                  const Icon = isIncome ? ArrowUpRight : ArrowDownRight;
+                  const transactionName = getTransactionName(transaction);
 
-                return (
-                  <li
-                    key={transaction.id}
-                    className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className={`flex size-10 shrink-0 items-center justify-center rounded-full ${
-                          isIncome
-                            ? 'bg-green-500/10 text-green-600'
-                            : 'bg-red-500/10 text-red-600'
-                        }`}
+                  return (
+                    <li key={transaction.id} className="space-y-4 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div
+                            className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full ${
+                              isIncome
+                                ? 'bg-green-500/10 text-green-600'
+                                : 'bg-red-500/10 text-red-600'
+                            }`}
+                          >
+                            <Icon aria-hidden="true" className="size-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="break-words font-medium">
+                              {transaction.description || 'Sem descrição'}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {formatTransactionDate(
+                                transaction.transaction_date,
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <p
+                          className={`shrink-0 font-semibold ${
+                            isIncome ? 'text-green-600' : 'text-red-600'
+                          }`}
+                        >
+                          {isIncome ? '+' : '−'}
+                          {currencyFormatter.format(transaction.amount)}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 border-t pt-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {category?.name ?? 'Categoria indisponível'}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {isIncome ? 'Receita' : 'Despesa'}
+                          </p>
+                        </div>
+                        <TransactionActions
+                          transactionName={transactionName}
+                          onEdit={() => setEditingTransaction(transaction)}
+                          onDelete={() => {
+                            setDeleteError(null);
+                            setDeletingTransaction(transaction);
+                          }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/30 text-muted-foreground">
+                      <th scope="col" className="px-6 py-3 font-medium">
+                        Data
+                      </th>
+                      <th scope="col" className="px-6 py-3 font-medium">
+                        Descrição
+                      </th>
+                      <th scope="col" className="px-6 py-3 font-medium">
+                        Categoria
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-right font-medium"
                       >
-                        <Icon aria-hidden="true" className="size-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {transaction.description || category?.name || 'Transação'}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {transaction.description
-                            ? `${category?.name ?? 'Categoria indisponível'} · `
-                            : ''}
-                          {formatTransactionDate(transaction.transaction_date)} ·{' '}
-                          {isIncome ? 'Receita' : 'Despesa'}
-                        </p>
-                      </div>
-                    </div>
-                    <p
-                      className={`shrink-0 font-semibold ${
-                        isIncome ? 'text-green-600' : 'text-red-600'
-                      }`}
+                        Valor
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-right font-medium"
+                      >
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {pageTransactions.map((transaction) => {
+                      const isIncome =
+                        transaction.transaction_type === 'income';
+                      const category = categories.find(
+                        (item) => item.id === transaction.category_id,
+                      );
+
+                      return (
+                        <tr key={transaction.id} className="hover:bg-muted/20">
+                          <td className="whitespace-nowrap px-6 py-4">
+                            {formatTransactionDate(transaction.transaction_date)}
+                          </td>
+                          <td className="max-w-64 px-6 py-4">
+                            <span className="block truncate font-medium">
+                              {transaction.description || 'Sem descrição'}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {isIncome ? 'Receita' : 'Despesa'}
+                            </span>
+                          </td>
+                          <td className="max-w-48 truncate px-6 py-4">
+                            {category?.name ?? 'Categoria indisponível'}
+                          </td>
+                          <td
+                            className={`whitespace-nowrap px-6 py-4 text-right font-semibold ${
+                              isIncome ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            {isIncome ? '+' : '−'}
+                            {currencyFormatter.format(transaction.amount)}
+                          </td>
+                          <td className="px-6 py-3">
+                            <TransactionActions
+                              transactionName={getTransactionName(transaction)}
+                              onEdit={() => setEditingTransaction(transaction)}
+                              onDelete={() => {
+                                setDeleteError(null);
+                                setDeletingTransaction(transaction);
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <nav
+                  aria-label="Paginação das transações"
+                  className="flex flex-col gap-3 border-t px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+                >
+                  <p className="text-sm text-muted-foreground">
+                    Exibindo {firstTransactionOnPage}–{lastTransactionOnPage}{' '}
+                    de {filteredTransactions.length} transações
+                  </p>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label="Página anterior"
+                      onClick={() => setCurrentPage(activePage - 1)}
+                      disabled={activePage <= 1}
                     >
-                      {isIncome ? '+' : '−'}
-                      {currencyFormatter.format(transaction.amount)}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
+                      <ChevronLeft aria-hidden="true" />
+                      Anterior
+                    </Button>
+                    <span
+                      aria-live="polite"
+                      className="text-sm font-medium tabular-nums"
+                    >
+                      Página {activePage} de {totalPages}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label="Próxima página"
+                      onClick={() => setCurrentPage(activePage + 1)}
+                      disabled={activePage >= totalPages}
+                    >
+                      Próxima
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                  </div>
+                </nav>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
 
-      {isCreateOpen && (
+      {(isCreateOpen || editingTransaction) && (
         <TransactionForm
+          key={editingTransaction?.id ?? 'new-transaction'}
           categories={categories}
+          transaction={editingTransaction ?? undefined}
           open
-          onOpenChange={setIsCreateOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsCreateOpen(false);
+              setEditingTransaction(null);
+            }
+          }}
         />
       )}
+
+      <Dialog.Root
+        open={Boolean(deletingTransaction)}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) {
+            setDeletingTransaction(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0" />
+          <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-6 shadow-xl outline-none">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <Dialog.Title className="text-xl font-semibold">
+                  Excluir transação?
+                </Dialog.Title>
+                <Dialog.Description className="text-sm text-muted-foreground">
+                  Tem certeza de que deseja excluir{' '}
+                  <span className="font-medium text-foreground">
+                    {deletingTransaction
+                      ? getTransactionName(deletingTransaction)
+                      : ''}
+                  </span>
+                  ? Esta ação não pode ser desfeita.
+                </Dialog.Description>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Fechar confirmação"
+                onClick={() => {
+                  if (!isDeleting) setDeletingTransaction(null);
+                }}
+                disabled={isDeleting}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </div>
+
+            {deleteError && (
+              <p
+                role="alert"
+                className="mb-4 text-sm font-medium text-destructive"
+              >
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeletingTransaction(null)}
+                disabled={isDeleting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Excluindo...' : 'Excluir transação'}
+              </Button>
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
