@@ -52,6 +52,8 @@ export async function updateSession(request: NextRequest) {
     { path: '/sign-up-success', whenAuthenticated: 'next' },
     { path: '/error', whenAuthenticated: 'next' },
     { path: '/callback', whenAuthenticated: 'next' },
+    { path: '/terms-of-use', whenAuthenticated: 'next' },
+    { path: '/privacy-policy', whenAuthenticated: 'next' },
 
     { path: '/', whenAuthenticated: 'next' },
     { path: '/pricing', whenAuthenticated: 'next' },

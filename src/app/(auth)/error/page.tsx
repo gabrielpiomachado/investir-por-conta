@@ -1,22 +1,24 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getAuthErrorMessage } from '@/features/auth/lib/auth-error-message';
 import { Suspense } from 'react';
 
 async function ErrorContent({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
+  const error = Array.isArray(params.error) ? params.error[0] : params.error;
 
   return (
     <>
-      {params?.error ? (
+      {error ? (
         <p className="text-sm text-muted-foreground">
-          Code error: {params.error}
+          {getAuthErrorMessage(error)}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          An unspecified error occurred.
+          Ocorreu um erro inesperado durante a autenticação. Tente novamente.
         </p>
       )}
     </>
@@ -26,7 +28,7 @@ async function ErrorContent({
 export default function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
@@ -35,7 +37,7 @@ export default function Page({
           <Card>
             <CardHeader>
               <CardTitle className="text-2xl">
-                Sorry, something went wrong.
+                Não foi possível concluir a autenticação.
               </CardTitle>
             </CardHeader>
             <CardContent>

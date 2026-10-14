@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
+import { getAuthErrorMessage } from '@/features/auth/lib/auth-error-message';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -38,7 +39,7 @@ export function ForgotPasswordForm({
       if (error) throw error;
       setSuccess(true);
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      setError(getAuthErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
@@ -49,34 +50,33 @@ export function ForgotPasswordForm({
       {success ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Check Your Email</CardTitle>
-            <CardDescription>Password reset instructions sent</CardDescription>
+            <CardTitle className="text-2xl">Verifique seu e-mail</CardTitle>
+            <CardDescription>Enviamos as instruções para redefinir sua senha.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              If you registered using your email and password, you will receive
-              a password reset email.
+              Se você se cadastrou com e-mail e senha, receberá uma mensagem
+              com as instruções para redefinir sua senha.
             </p>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Reset Your Password</CardTitle>
+            <CardTitle className="text-2xl">Redefinir senha</CardTitle>
             <CardDescription>
-              Type in your email and we&apos;ll send you a link to reset your
-              password
+              Informe seu e-mail e enviaremos um link para criar uma nova senha.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleForgotPassword}>
               <div className="flex flex-col gap-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">E-mail</Label>
                   <Input
                     id="email"
                     type="email"
-                    placeholder="m@example.com"
+                    placeholder="voce@exemplo.com"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -84,13 +84,13 @@ export function ForgotPasswordForm({
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
                 <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Sending...' : 'Send reset email'}
+                  {isLoading ? 'Enviando...' : 'Enviar instruções'}
                 </Button>
               </div>
               <div className="mt-4 text-center text-sm">
-                Already have an account?{' '}
+                Já tem uma conta?{' '}
                 <Link href="/sign-in" className="underline underline-offset-4">
-                  Sign in
+                  Entrar
                 </Link>
               </div>
             </form>
