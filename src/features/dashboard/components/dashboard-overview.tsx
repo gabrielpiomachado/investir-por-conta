@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ArrowDownRight,
@@ -311,9 +312,27 @@ export function DashboardOverview({
   const budgetTransactions = transactions.filter(
     (transaction) => transaction.transaction_type === 'expense',
   );
-  const selectedBudgets = budgets.filter(
-    (budget) => budget.period === budgetPeriod,
-  );
+  const selectedBudgets = budgets
+    .filter((budget) => budget.period === budgetPeriod)
+    .map((budget) => ({
+      budget,
+      spent: calculateBudgetSpent(budget, budgetTransactions, selectedMonth),
+    }))
+    .sort(
+      (a, b) =>
+        b.spent / b.budget.amount - a.spent / a.budget.amount,
+    )
+    .slice(0, 3);
+  const prioritizedGoals = goals
+    .map((goal) => ({
+      goal,
+      percentage: calculateGoalProgress(
+        goal.current_amount,
+        goal.target_amount,
+      ),
+    }))
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 4);
   const { startDate, endDate } = getMonthBounds(selectedMonth);
   const recentTransactions = transactions
     .filter(
@@ -482,26 +501,34 @@ export function DashboardOverview({
                 </CardTitle>
                 <CardDescription>{monthLabel(selectedMonth)}</CardDescription>
               </div>
-              <div
-                role="group"
-                aria-label="Período dos orçamentos"
-                className="inline-flex rounded-md border p-0.5"
-              >
-                {(['monthly', 'annual'] as const).map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    aria-pressed={budgetPeriod === period}
-                    onClick={() => setBudgetPeriod(period)}
-                    className={`rounded px-2.5 py-1 text-xs font-medium ${
-                      budgetPeriod === period
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {period === 'monthly' ? 'Mensal' : 'Anual'}
-                  </button>
-                ))}
+              <div className="flex flex-col items-end gap-1">
+                <div
+                  role="group"
+                  aria-label="Período dos orçamentos"
+                  className="inline-flex rounded-md border p-0.5"
+                >
+                  {(['monthly', 'annual'] as const).map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      aria-pressed={budgetPeriod === period}
+                      onClick={() => setBudgetPeriod(period)}
+                      className={`rounded px-2.5 py-1 text-xs font-medium ${
+                        budgetPeriod === period
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {period === 'monthly' ? 'Mensal' : 'Anual'}
+                    </button>
+                  ))}
+                </div>
+                <Link
+                  href="/budgets"
+                  className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                  Ver todas
+                </Link>
               </div>
             </div>
           </CardHeader>
@@ -513,12 +540,7 @@ export function DashboardOverview({
               </p>
             ) : (
               <ul className="divide-y">
-                {selectedBudgets.map((budget) => {
-                  const spent = calculateBudgetSpent(
-                    budget,
-                    budgetTransactions,
-                    selectedMonth,
-                  );
+                {selectedBudgets.map(({ budget, spent }) => {
                   const percentage = (spent / budget.amount) * 100;
                   const exceeded = percentage >= 100;
                   const progress = clampPercentage(percentage);
@@ -596,6 +618,12 @@ export function DashboardOverview({
             <CardDescription>
               {goals.length} {goals.length === 1 ? 'meta' : 'metas'}
             </CardDescription>
+            <Link
+              href="/goals"
+              className="w-fit text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              Ver todas
+            </Link>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
             {goals.length === 0 ? (
@@ -604,11 +632,7 @@ export function DashboardOverview({
               </p>
             ) : (
               <ul className="divide-y">
-                {goals.map((goal) => {
-                  const percentage = calculateGoalProgress(
-                    goal.current_amount,
-                    goal.target_amount,
-                  );
+                {prioritizedGoals.map(({ goal, percentage }) => {
                   const progress = clampPercentage(percentage);
 
                   return (
@@ -660,6 +684,12 @@ export function DashboardOverview({
           <CardHeader className="border-b py-4">
             <CardTitle className="text-base">Transações do mês</CardTitle>
             <CardDescription>{monthLabel(selectedMonth)}</CardDescription>
+            <Link
+              href="/transactions"
+              className="w-fit text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              Ver todas
+            </Link>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
             {recentTransactions.length === 0 ? (
