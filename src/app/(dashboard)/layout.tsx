@@ -3,7 +3,7 @@ import { AuthButton } from '@/features/auth/components/auth-button';
 import { Footer } from '@/components/layout/footer';
 import { BudgetAlertCenter } from '@/features/budgets/components/budget-alert-center';
 
-export default function PublicLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;

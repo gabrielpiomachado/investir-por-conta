@@ -25,7 +25,7 @@ export default async function RecurrencePage() {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-semibold">Transações recorrentes</h1>
-        <p role="alert" className="mt-4 text-sm text-red-500">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           Não foi possível processar as ocorrências vencidas. Tente novamente
           mais tarde.
         </p>
@@ -52,7 +52,7 @@ export default async function RecurrencePage() {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-semibold">Transações recorrentes</h1>
-        <p role="alert" className="mt-4 text-sm text-red-500">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           Não foi possível carregar suas recorrências. Tente novamente mais
           tarde.
         </p>

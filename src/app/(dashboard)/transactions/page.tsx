@@ -38,7 +38,7 @@ export default async function TransactionsPage() {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-semibold">Transações</h1>
-        <p className="mt-4 text-sm text-red-500">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           Não foi possível carregar suas transações. Tente novamente mais tarde.
         </p>
       </div>

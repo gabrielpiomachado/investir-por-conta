@@ -29,7 +29,7 @@ export default async function CategoriesPage() {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-semibold">Categorias</h1>
-        <p className="mt-4 text-sm text-red-500">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           Não foi possível carregar suas categorias.
         </p>
       </div>

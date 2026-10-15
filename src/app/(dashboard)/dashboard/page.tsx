@@ -40,7 +40,7 @@ export default async function DashboardPage({
     return (
       <div className="p-6">
         <h1 className="text-3xl font-semibold">Visão geral</h1>
-        <p role="alert" className="mt-4 text-sm text-red-500">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           Não foi possível carregar o saldo consolidado. Tente novamente mais
           tarde.
         </p>
