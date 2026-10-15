@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowDownToLine, KeyRound, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,7 @@ type ProfileSettingsProps = {
 };
 
 export function ProfileSettings({ account }: ProfileSettingsProps) {
+  const router = useRouter();
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
@@ -30,6 +32,12 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] =
+    useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isAccountDeleted, setIsAccountDeleted] = useState(false);
 
   const handlePasswordUpdate = async (
     event: React.FormEvent<HTMLFormElement>,
@@ -88,6 +96,60 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleAccountDeletion = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    setDeleteError(null);
+    setIsDeletingAccount(true);
+
+    try {
+      const response = await fetch('/api/profile/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result?.error === 'string'
+            ? result.error
+            : 'Não foi possível excluir sua conta. Tente novamente.',
+        );
+      }
+
+      setIsAccountDeleted(true);
+      setDeletePassword('');
+
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+
+      if (error) {
+        setDeleteError(
+          'Sua conta foi excluída, mas não foi possível encerrar a sessão neste navegador. Acesse a página inicial para continuar.',
+        );
+        return;
+      }
+
+      router.replace('/');
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível excluir sua conta. Tente novamente.',
+      );
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
+  const cancelAccountDeletion = () => {
+    setIsDeleteConfirmationOpen(false);
+    setDeletePassword('');
+    setDeleteError(null);
   };
 
   return (
@@ -199,18 +261,96 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
             Excluir minha conta
           </CardTitle>
           <CardDescription>
-            A exclusão remove permanentemente seus dados e não pode ser
-            desfeita.
+            Encerre sua conta e remova os dados associados a ela.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            A exclusão ficará disponível quando o envio da confirmação por
-            e-mail estiver configurado.
-          </p>
-          <Button disabled type="button" variant="destructive">
-            Excluir conta
-          </Button>
+          {isAccountDeleted ? (
+            <div className="space-y-3">
+              <p className="text-sm text-emerald-700" role="status">
+                Sua conta foi excluída permanentemente.
+              </p>
+              {deleteError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {deleteError}
+                </p>
+              )}
+              <Button onClick={() => router.replace('/')} type="button">
+                Ir para a página inicial
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button
+                aria-controls="delete-account-confirmation"
+                aria-expanded={isDeleteConfirmationOpen}
+                onClick={() => {
+                  setDeleteError(null);
+                  setIsDeleteConfirmationOpen(true);
+                }}
+                type="button"
+                variant="destructive"
+              >
+                Excluir conta
+              </Button>
+              {isDeleteConfirmationOpen && (
+                <form
+                  className="space-y-4 rounded-lg border border-destructive/30 p-4"
+                  id="delete-account-confirmation"
+                  onSubmit={handleAccountDeletion}
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium text-destructive">
+                      Esta ação não pode ser desfeita.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      A conta e todos os dados associados serão excluídos
+                      permanentemente. Informe sua senha para confirmar.
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="delete-account-password">
+                      Senha atual
+                    </Label>
+                    <Input
+                      autoComplete="current-password"
+                      id="delete-account-password"
+                      onChange={(event) =>
+                        setDeletePassword(event.target.value)
+                      }
+                      required
+                      type="password"
+                      value={deletePassword}
+                    />
+                  </div>
+                  {deleteError && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {deleteError}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      disabled={isDeletingAccount}
+                      onClick={cancelAccountDeletion}
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      disabled={isDeletingAccount}
+                      type="submit"
+                      variant="destructive"
+                    >
+                      {isDeletingAccount
+                        ? 'Excluindo conta...'
+                        : 'Sim, excluir minha conta'}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
