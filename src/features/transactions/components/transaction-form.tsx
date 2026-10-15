@@ -11,20 +11,13 @@ import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
+import type { Category, CategoryType } from '@/features/categories';
 import { transactionSchema } from '../schemas/transaction.schema';
-import type { Category } from '@/features/categories/components/category-form';
-import type { Database } from '@/types/database.types';
+import type { TransactionRecord } from '../types';
+import { getLocalDateInputValue } from '../lib/transaction-formatters';
+import { saveTransaction } from '../services/transaction-service';
 
-export type TransactionRecord = Pick<
-  Database['public']['Tables']['transactions']['Row'],
-  | 'id'
-  | 'category_id'
-  | 'transaction_type'
-  | 'amount'
-  | 'transaction_date'
-  | 'description'
-  | 'recurring_transaction_id'
->;
+export type { TransactionRecord };
 
 type TransactionFormProps = {
   categories: Category[];
@@ -36,22 +29,15 @@ type TransactionFormProps = {
 const selectClassName =
   'h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
-function getLocalDateInputValue() {
-  const today = new Date();
-  today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
-  return today.toISOString().slice(0, 10);
-}
-
 export function TransactionForm({
   categories,
   transaction,
   open,
   onOpenChange,
 }: TransactionFormProps) {
-  const [transactionType, setTransactionType] =
-    useState<Category['category_type']>(
-      transaction?.transaction_type ?? 'expense',
-    );
+  const [transactionType, setTransactionType] = useState<CategoryType>(
+    transaction?.transaction_type ?? 'expense',
+  );
   const [amount, setAmount] = useState(
     transaction ? String(transaction.amount) : '',
   );
@@ -97,8 +83,7 @@ export function TransactionForm({
 
     try {
       const supabase = createClient();
-      const { data: userData, error: userError } =
-        await supabase.auth.getUser();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
 
       if (userError || !userData.user) {
         throw new Error(
@@ -108,43 +93,18 @@ export function TransactionForm({
         );
       }
 
-      const transactionValues = {
-        transaction_type: validation.data.transaction_type,
-        amount: validation.data.amount,
-        category_id: validation.data.category_id,
-        transaction_date: validation.data.transaction_date,
-        description: validation.data.description,
-      };
-
-      if (transaction) {
-        const { error: updateError } = await supabase
-          .from('transactions')
-          .update({
-            ...transactionValues,
-            ...(transaction.recurring_transaction_id
-              ? { recurrence_occurrence_date: validation.data.transaction_date }
-              : {}),
-          })
-          .eq('id', transaction.id)
-          .eq('user_id', userData.user.id)
-          .select('id')
-          .single();
-
-        if (updateError) {
-          throw new Error('Não foi possível atualizar a transação.');
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .from('transactions')
-          .insert({
-            user_id: userData.user.id,
-            ...transactionValues,
-          });
-
-        if (insertError) {
-          throw new Error('Não foi possível registrar a transação.');
-        }
-      }
+      await saveTransaction(
+        supabase,
+        {
+          transaction_type: validation.data.transaction_type,
+          amount: validation.data.amount,
+          category_id: validation.data.category_id,
+          transaction_date: validation.data.transaction_date,
+          description: validation.data.description,
+        },
+        userData.user.id,
+        transaction,
+      );
 
       if (
         validation.data.transaction_type === 'expense' ||
@@ -152,6 +112,7 @@ export function TransactionForm({
       ) {
         notifyBudgetActivity('check');
       }
+
       onOpenChange(false);
       router.refresh();
     } catch (err: unknown) {
@@ -212,9 +173,7 @@ export function TransactionForm({
                 className={selectClassName}
                 value={transactionType}
                 onChange={(event) => {
-                  setTransactionType(
-                    event.target.value as Category['category_type'],
-                  );
+                  setTransactionType(event.target.value as CategoryType);
                   setCategoryId('');
                   setError(null);
                 }}

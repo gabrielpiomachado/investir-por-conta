@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { getFinancialBalance } from '@/lib/financial-balance';
-import { DashboardOverview } from '@/features/dashboard/components/dashboard-overview';
-import { getDashboardDateRange } from '@/features/dashboard/lib/dashboard-metrics';
+import {
+  DashboardOverview,
+  getDashboardDateRange,
+} from '@/features/dashboard';
 import { isValidMonth } from '@/features/budgets/lib/budget-progress';
 
 type DashboardPageProps = {

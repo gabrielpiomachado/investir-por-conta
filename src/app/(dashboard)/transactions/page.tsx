@@ -1,4 +1,4 @@
-import { TransactionsManager } from '@/features/transactions/components/transactions-manager';
+import { TransactionsManager } from '@/features/transactions';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function TransactionsPage() {

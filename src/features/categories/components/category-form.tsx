@@ -6,21 +6,19 @@ import { Dialog } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
-import { categorySchema } from '../schemas/category.schema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import type { Database } from '@/types/database.types';
+import { categorySchema } from '../schemas/category.schema';
+import type { Category, CategoryType } from '../types';
+import { saveCategory } from '../services/category-service';
 
-export type Category = Pick<
-  Database['public']['Tables']['categories']['Row'],
-  'id' | 'name' | 'category_type'
->;
+export type { Category, CategoryType };
 
 type CategoryFormProps = {
   category?: Category;
-  initialCategoryType: Category['category_type'];
+  initialCategoryType: CategoryType;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -32,7 +30,7 @@ export function CategoryForm({
   onOpenChange,
 }: CategoryFormProps) {
   const [name, setName] = useState(category?.name ?? '');
-  const [categoryType, setCategoryType] = useState<Category['category_type']>(
+  const [categoryType, setCategoryType] = useState<CategoryType>(
     category?.category_type ?? initialCategoryType,
   );
   const [error, setError] = useState<string | null>(null);
@@ -63,46 +61,21 @@ export function CategoryForm({
 
     try {
       const supabase = createClient();
-      const { data: userData, error: userError } =
-        await supabase.auth.getUser();
+      const { data: userData, error: userError } = await supabase.auth.getUser();
 
       if (userError || !userData.user) {
-        throw new Error(
-          'Você precisa estar autenticado para salvar uma categoria.',
-        );
+        throw new Error('Você precisa estar autenticado para salvar uma categoria.');
       }
 
-      if (category) {
-        const { error: updateError } = await supabase
-          .from('categories')
-          .update({ name: validation.data.name })
-          .eq('id', category.id)
-          .eq('user_id', userData.user.id)
-          .select('id')
-          .single();
-
-        if (updateError) {
-          if (updateError.code === '23505') {
-            throw new Error('Você já possui uma categoria com este nome.');
-          }
-          throw new Error('Não foi possível salvar a categoria.');
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .from('categories')
-          .insert({
-            name: validation.data.name,
-            category_type: validation.data.category_type,
-            user_id: userData.user.id,
-          });
-
-        if (insertError) {
-          if (insertError.code === '23505') {
-            throw new Error('Você já possui uma categoria com este nome.');
-          }
-          throw new Error('Não foi possível salvar a categoria.');
-        }
-      }
+      await saveCategory(
+        supabase,
+        {
+          name: validation.data.name,
+          category_type: validation.data.category_type,
+        },
+        userData.user.id,
+        category?.id,
+      );
 
       onOpenChange(false);
       router.refresh();
