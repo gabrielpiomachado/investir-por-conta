@@ -1,5 +1,6 @@
 import './globals.css';
 import { Manrope, Space_Grotesk } from 'next/font/google';
+import { ThemeProvider } from '@/components/theme-provider';
 
 const bodyFont = Manrope({
   subsets: ['latin'],
@@ -17,10 +18,19 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`dark ${bodyFont.variable} ${headingFont.variable}`}
+      className={`${bodyFont.variable} ${headingFont.variable}`}
       suppressHydrationWarning
     >
-      <body>{children}</body>
+      <body>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

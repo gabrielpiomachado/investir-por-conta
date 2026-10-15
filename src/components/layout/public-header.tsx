@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AuthButton } from '@/features/auth/components/auth-button';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export function PublicHeader() {
   return (
@@ -57,7 +58,10 @@ export function PublicHeader() {
           </Link>
         </nav>
 
-        <AuthButton />
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <AuthButton showDashboardLink />
+        </div>
       </div>
     </header>
   );

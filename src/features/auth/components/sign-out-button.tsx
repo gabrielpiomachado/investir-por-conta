@@ -1,11 +1,22 @@
 'use client';
 
+import type { VariantProps } from 'class-variance-authority';
 import { createClient } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/button';
+import { Button, type buttonVariants } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-export function SignOutButton() {
+type SignOutButtonProps = {
+  variant?: VariantProps<typeof buttonVariants>['variant'];
+  size?: VariantProps<typeof buttonVariants>['size'];
+  className?: string;
+};
+
+export function SignOutButton({
+  variant = 'default',
+  size = 'default',
+  className,
+}: SignOutButtonProps = {}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -33,7 +44,13 @@ export function SignOutButton() {
 
   return (
     <div>
-      <Button onClick={signOut} disabled={isSigningOut}>
+      <Button
+        variant={variant}
+        size={size}
+        className={className}
+        onClick={signOut}
+        disabled={isSigningOut}
+      >
         {isSigningOut ? 'Saindo...' : 'Sair'}
       </Button>
       {error && (

@@ -16,6 +16,7 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 type DashboardSidebarProps = {
   account: ReactNode;
@@ -74,7 +75,13 @@ function SidebarContents({
         Investir por Conta
       </Link>
       <NavigationLinks onNavigate={onNavigate} />
-      <div className="mt-auto border-t border-border pt-4">{account}</div>
+      <div className="mt-auto border-t border-border pt-4">
+        <div className="mb-3 flex items-center justify-between px-1">
+          <span className="text-xs font-medium text-muted-foreground">Tema</span>
+          <ThemeToggle align="start" />
+        </div>
+        {account}
+      </div>
     </div>
   );
 }
@@ -95,12 +102,15 @@ export function DashboardSidebar({ account }: DashboardSidebarProps) {
         >
           Investir por Conta
         </Link>
-        <Dialog.Trigger
-          aria-label="Abrir navegação"
-          className="inline-flex size-9 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Menu aria-hidden="true" className="size-5" />
-        </Dialog.Trigger>
+        <div className="flex items-center gap-2">
+          <ThemeToggle align="end" />
+          <Dialog.Trigger
+            aria-label="Abrir navegação"
+            className="inline-flex size-9 items-center justify-center rounded-md text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Menu aria-hidden="true" className="size-5" />
+          </Dialog.Trigger>
+        </div>
       </header>
 
       <Dialog.Portal>
