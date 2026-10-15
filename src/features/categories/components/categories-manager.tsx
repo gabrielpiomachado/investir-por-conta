@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@base-ui/react/dialog';
 import {
+  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   FolderOpen,
+  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -37,6 +39,10 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(
     null,
   );
+  const [associatedTransactionsCount, setAssociatedTransactionsCount] = useState<
+    number | null
+  >(null);
+  const [isLoadingCount, setIsLoadingCount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
@@ -46,6 +52,33 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
   );
   const isIncome = activeType === 'income';
   const typeLabel = isIncome ? 'Receitas' : 'Despesas';
+  const hasAssociatedTransactions =
+    associatedTransactionsCount !== null && associatedTransactionsCount > 0;
+
+  const handleOpenDelete = async (category: Category) => {
+    setDeleteError(null);
+    setDeletingCategory(category);
+    setIsLoadingCount(true);
+    setAssociatedTransactionsCount(null);
+
+    try {
+      const supabase = createClient();
+      const { count, error } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', category.id);
+
+      if (error) {
+        setAssociatedTransactionsCount(0);
+      } else {
+        setAssociatedTransactionsCount(count ?? 0);
+      }
+    } catch {
+      setAssociatedTransactionsCount(0);
+    } finally {
+      setIsLoadingCount(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deletingCategory) return;
@@ -80,14 +113,20 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
               'Não é permitido excluir uma categoria que possua orçamento ativo vinculado.',
             );
           }
+          if (detail.includes('recurring')) {
+            throw new Error(
+              'Não é permitido excluir uma categoria que possua transações recorrentes vinculadas.',
+            );
+          }
           throw new Error(
-            'Não é permitido excluir uma categoria que possua transações vinculadas.',
+            'Não é permitido excluir esta categoria pois outros registros dependem dela.',
           );
         }
         throw new Error('Não foi possível excluir a categoria.');
       }
 
       setDeletingCategory(null);
+      setAssociatedTransactionsCount(null);
       router.refresh();
     } catch (err: unknown) {
       setDeleteError(
@@ -97,7 +136,8 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
           [
             'Você precisa estar autenticado para excluir uma categoria.',
             'Não é permitido excluir uma categoria que possua orçamento ativo vinculado.',
-            'Não é permitido excluir uma categoria que possua transações vinculadas.',
+            'Não é permitido excluir uma categoria que possua transações recorrentes vinculadas.',
+            'Não é permitido excluir esta categoria pois outros registros dependem dela.',
           ],
         ),
       );
@@ -247,10 +287,7 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
                         aria-label={`Excluir categoria ${category.name}`}
                         title="Excluir categoria"
                         className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => {
-                          setDeleteError(null);
-                          setDeletingCategory(category);
-                        }}
+                        onClick={() => handleOpenDelete(category)}
                       >
                         <Trash2 aria-hidden="true" />
                       </Button>
@@ -284,6 +321,7 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
           if (!open && !isDeleting) {
             setDeletingCategory(null);
             setDeleteError(null);
+            setAssociatedTransactionsCount(null);
           }
         }}
       >
@@ -296,11 +334,23 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
                   Excluir Categoria
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-muted-foreground">
-                  Tem certeza de que deseja excluir{' '}
-                  <span className="font-medium text-foreground">
-                    {deletingCategory?.name}
-                  </span>
-                  ? Esta ação não pode ser desfeita.
+                  {hasAssociatedTransactions ? (
+                    <>
+                      Tem certeza de que deseja excluir a categoria{' '}
+                      <span className="font-medium text-foreground">
+                        {deletingCategory?.name}
+                      </span>
+                      ?
+                    </>
+                  ) : (
+                    <>
+                      Tem certeza de que deseja excluir{' '}
+                      <span className="font-medium text-foreground">
+                        {deletingCategory?.name}
+                      </span>
+                      ? Esta ação não pode ser desfeita.
+                    </>
+                  )}
                 </Dialog.Description>
               </div>
               <Button
@@ -309,13 +359,48 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
                 size="icon"
                 aria-label="Fechar confirmação"
                 onClick={() => {
-                  if (!isDeleting) setDeletingCategory(null);
+                  if (!isDeleting) {
+                    setDeletingCategory(null);
+                    setDeleteError(null);
+                    setAssociatedTransactionsCount(null);
+                  }
                 }}
                 disabled={isDeleting}
               >
                 <X aria-hidden="true" />
               </Button>
             </div>
+
+            {isLoadingCount && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <Loader2 aria-hidden="true" className="size-4 animate-spin text-primary" />
+                <span>Verificando transações vinculadas...</span>
+              </div>
+            )}
+
+            {!isLoadingCount && hasAssociatedTransactions && (
+              <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="font-semibold leading-none">
+                      Atenção: exclusão em cascata
+                    </p>
+                    <p className="text-xs leading-relaxed text-destructive/90">
+                      Esta categoria possui{' '}
+                      <strong className="font-semibold text-destructive">
+                        {associatedTransactionsCount}{' '}
+                        {associatedTransactionsCount === 1
+                          ? 'transação vinculada'
+                          : 'transações vinculadas'}
+                      </strong>
+                      . Ao confirmar a exclusão,{' '}
+                      <strong>todas as transações vinculadas serão apagadas permanentemente</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {deleteError && (
               <p
@@ -330,7 +415,11 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setDeletingCategory(null)}
+                onClick={() => {
+                  setDeletingCategory(null);
+                  setDeleteError(null);
+                  setAssociatedTransactionsCount(null);
+                }}
                 disabled={isDeleting}
               >
                 Cancelar
@@ -339,9 +428,13 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
                 type="button"
                 variant="destructive"
                 onClick={handleDelete}
-                disabled={isDeleting}
+                disabled={isDeleting || isLoadingCount}
               >
-                {isDeleting ? 'Excluindo...' : 'Excluir categoria'}
+                {isDeleting
+                  ? 'Excluindo...'
+                  : hasAssociatedTransactions
+                    ? 'Excluir categoria e transações'
+                    : 'Excluir categoria'}
               </Button>
             </div>
           </Dialog.Popup>
