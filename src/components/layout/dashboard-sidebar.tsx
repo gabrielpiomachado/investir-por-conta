@@ -23,7 +23,7 @@ type DashboardSidebarProps = {
 
 const navigationItems = [
   { href: '/dashboard', label: 'Visão geral', icon: LayoutDashboard },
-  { href: '/transactions', label: 'Lançamentos', icon: ArrowLeftRight },
+  { href: '/transactions', label: 'Transações', icon: ArrowLeftRight },
   { href: '/recurrence', label: 'Recorrências', icon: CalendarClock },
   { href: '/categories', label: 'Categorias', icon: Tag },
   { href: '/budgets', label: 'Orçamentos', icon: Wallet },

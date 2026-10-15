@@ -13,7 +13,13 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { env } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
+import {
+  changePasswordSchema,
+  verifyCurrentPasswordSchema,
+} from '../schemas/profile.schema';
 
 type ProfileSettingsProps = {
   account: {
@@ -25,10 +31,14 @@ type ProfileSettingsProps = {
 
 export function ProfileSettings({ account }: ProfileSettingsProps) {
   const router = useRouter();
-  const [password, setPassword] = useState('');
-  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [passwordStep, setPasswordStep] = useState<1 | 2>(1);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isValidatingPassword, setIsValidatingPassword] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -39,6 +49,82 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isAccountDeleted, setIsAccountDeleted] = useState(false);
 
+  const handleVerifyCurrentPassword = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    setPasswordMessage(null);
+    setPasswordError(null);
+
+    const validation = verifyCurrentPasswordSchema.safeParse({
+      currentPassword,
+    });
+    if (!validation.success) {
+      setPasswordError(
+        validation.error.issues[0]?.message ?? 'Informe sua senha atual.',
+      );
+      return;
+    }
+
+    setIsValidatingPassword(true);
+
+    try {
+      const passwordVerifier = createSupabaseClient(
+        env.NEXT_PUBLIC_SUPABASE_URL,
+        env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            persistSession: false,
+          },
+        },
+      );
+
+      const { data, error } = await passwordVerifier.auth.signInWithPassword({
+        email: account.email,
+        password: validation.data.currentPassword,
+      });
+
+      if (error) {
+        const normalizedError = error.message.toLowerCase();
+
+        if (normalizedError.includes('rate limit')) {
+          setPasswordError(
+            'Muitas tentativas. Aguarde um pouco e tente novamente.',
+          );
+          return;
+        }
+
+        if (
+          normalizedError.includes('invalid login credentials') ||
+          normalizedError.includes('invalid_credentials')
+        ) {
+          setPasswordError('A senha atual informada está incorreta.');
+          return;
+        }
+
+        setPasswordError(
+          'Não foi possível validar sua senha atual. Tente novamente.',
+        );
+        return;
+      }
+
+      if (data.user?.id !== account.id) {
+        setPasswordError('A senha atual informada está incorreta.');
+        return;
+      }
+
+      setPasswordStep(2);
+    } catch {
+      setPasswordError(
+        'Não foi possível validar sua senha atual. Tente novamente.',
+      );
+    } finally {
+      setIsValidatingPassword(false);
+    }
+  };
+
   const handlePasswordUpdate = async (
     event: React.FormEvent<HTMLFormElement>,
   ) => {
@@ -46,8 +132,16 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
     setPasswordMessage(null);
     setPasswordError(null);
 
-    if (password !== passwordConfirmation) {
-      setPasswordError('As senhas não coincidem.');
+    const validation = changePasswordSchema.safeParse({
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    });
+
+    if (!validation.success) {
+      setPasswordError(
+        validation.error.issues[0]?.message ?? 'Dados inválidos.',
+      );
       return;
     }
 
@@ -55,20 +149,34 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await supabase.auth.updateUser({
+        password: validation.data.newPassword,
+      });
 
       if (error) {
         throw new Error('Não foi possível alterar sua senha.');
       }
 
-      setPassword('');
-      setPasswordConfirmation('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordStep(1);
+      setIsChangePasswordOpen(false);
       setPasswordMessage('Senha alterada com sucesso.');
     } catch {
       setPasswordError('Não foi possível alterar sua senha.');
     } finally {
       setIsSavingPassword(false);
     }
+  };
+
+  const handleCancelPasswordChange = () => {
+    setIsChangePasswordOpen(false);
+    setPasswordStep(1);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(null);
   };
 
   const handleExport = async () => {
@@ -183,50 +291,151 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
             Escolha uma nova senha para sua conta.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handlePasswordUpdate}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="new-password">Nova senha</Label>
-                <Input
-                  autoComplete="new-password"
-                  id="new-password"
-                  minLength={8}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                  type="password"
-                  value={password}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="confirm-password">Confirmar nova senha</Label>
-                <Input
-                  autoComplete="new-password"
-                  id="confirm-password"
-                  minLength={8}
-                  onChange={(event) =>
-                    setPasswordConfirmation(event.target.value)
-                  }
-                  required
-                  type="password"
-                  value={passwordConfirmation}
-                />
-              </div>
-            </div>
-            {passwordError && (
-              <p className="text-sm text-destructive" role="alert">
-                {passwordError}
-              </p>
-            )}
-            {passwordMessage && (
-              <p className="text-sm text-emerald-700" role="status">
-                {passwordMessage}
-              </p>
-            )}
-            <Button disabled={isSavingPassword} type="submit">
-              {isSavingPassword ? 'Salvando...' : 'Salvar nova senha'}
+        <CardContent className="space-y-3">
+          {passwordMessage && (
+            <p className="text-sm text-emerald-700" role="status">
+              {passwordMessage}
+            </p>
+          )}
+
+          {!isChangePasswordOpen ? (
+            <Button
+              aria-controls="change-password-card"
+              aria-expanded={isChangePasswordOpen}
+              onClick={() => {
+                setPasswordMessage(null);
+                setPasswordError(null);
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordStep(1);
+                setIsChangePasswordOpen(true);
+              }}
+              type="button"
+            >
+              Alterar senha
             </Button>
-          </form>
+          ) : (
+            <div
+              className="space-y-4 rounded-lg border p-4"
+              id="change-password-card"
+            >
+              {passwordStep === 1 ? (
+                <form
+                  className="space-y-4"
+                  onSubmit={handleVerifyCurrentPassword}
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium">Confirmar senha atual</p>
+                    <p className="text-sm text-muted-foreground">
+                      Por segurança, informe sua senha atual para continuar.
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="current-password">Senha atual</Label>
+                    <Input
+                      autoComplete="current-password"
+                      id="current-password"
+                      onChange={(event) =>
+                        setCurrentPassword(event.target.value)
+                      }
+                      required
+                      type="password"
+                      value={currentPassword}
+                    />
+                  </div>
+                  {passwordError && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {passwordError}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      disabled={isValidatingPassword}
+                      onClick={handleCancelPasswordChange}
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button disabled={isValidatingPassword} type="submit">
+                      {isValidatingPassword ? 'Verificando...' : 'Continuar'}
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <form className="space-y-4" onSubmit={handlePasswordUpdate}>
+                  <div className="space-y-1">
+                    <p className="font-medium">Definir nova senha</p>
+                    <p className="text-sm text-muted-foreground">
+                      Escolha uma nova senha com no mínimo 8 caracteres.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="new-password">Nova senha</Label>
+                      <Input
+                        autoComplete="new-password"
+                        id="new-password"
+                        minLength={8}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        required
+                        type="password"
+                        value={newPassword}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="confirm-password">
+                        Confirmar nova senha
+                      </Label>
+                      <Input
+                        autoComplete="new-password"
+                        id="confirm-password"
+                        minLength={8}
+                        onChange={(event) =>
+                          setConfirmPassword(event.target.value)
+                        }
+                        required
+                        type="password"
+                        value={confirmPassword}
+                      />
+                    </div>
+                  </div>
+                  {passwordError && (
+                    <p className="text-sm text-destructive" role="alert">
+                      {passwordError}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      disabled={isSavingPassword}
+                      onClick={() => {
+                        setPasswordError(null);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPasswordStep(1);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      Voltar
+                    </Button>
+                    <Button
+                      disabled={isSavingPassword}
+                      onClick={handleCancelPasswordChange}
+                      type="button"
+                      variant="outline"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button disabled={isSavingPassword} type="submit">
+                      {isSavingPassword ? 'Salvando...' : 'Salvar nova senha'}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
