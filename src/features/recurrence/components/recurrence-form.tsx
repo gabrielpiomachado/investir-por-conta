@@ -11,7 +11,10 @@ import { createClient } from '@/lib/supabase/client';
 import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import type { Database } from '@/types/database.types';
-import { recurrenceSchema } from '../schemas/recurrence.schema';
+import {
+  recurrenceSchema,
+  type RecurrenceInput,
+} from '../schemas/recurrence.schema';
 
 type Recurrence = Database['public']['Tables']['recurring_transactions']['Row'];
 type Category = Pick<
@@ -88,6 +91,12 @@ export function RecurrenceForm({
     recurrence?.start_date ?? defaultStartDate,
   );
   const [description, setDescription] = useState(recurrence?.description ?? '');
+  const [step, setStep] = useState<'form' | 'confirm_scope'>('form');
+  const [editScope, setEditScope] = useState<'future' | 'all'>('future');
+  const [pastTransactionsCount, setPastTransactionsCount] = useState<
+    number | null
+  >(null);
+  const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -97,7 +106,12 @@ export function RecurrenceForm({
   );
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen && isLoading) return;
+    if (!nextOpen && (isLoading || isValidating)) return;
+    if (!nextOpen) {
+      setStep('form');
+      setPastTransactionsCount(null);
+      setError(null);
+    }
     onOpenChange(nextOpen);
   };
 
@@ -119,7 +133,38 @@ export function RecurrenceForm({
       return;
     }
 
+    if (recurrence) {
+      setIsValidating(true);
+      try {
+        const supabase = createClient();
+        const { count, error: countError } = await supabase
+          .from('transactions')
+          .select('id', { count: 'exact', head: true })
+          .eq('recurring_transaction_id', recurrence.id);
+
+        if (!countError && count && count > 0) {
+          setPastTransactionsCount(count);
+          setEditScope('future');
+          setStep('confirm_scope');
+          setIsValidating(false);
+          return;
+        }
+      } catch {
+        // Fallback to direct save
+      } finally {
+        setIsValidating(false);
+      }
+    }
+
+    await executeSave(validation.data, 'future');
+  };
+
+  const executeSave = async (
+    input: RecurrenceInput,
+    scope: 'future' | 'all',
+  ) => {
     setIsLoading(true);
+    setError(null);
 
     try {
       const supabase = createClient();
@@ -132,7 +177,6 @@ export function RecurrenceForm({
         );
       }
 
-      const input = validation.data;
       const anchorDay = Number(input.start_date.slice(8, 10));
 
       if (recurrence) {
@@ -183,6 +227,33 @@ export function RecurrenceForm({
         if (updateError) {
           throw new Error('Não foi possível salvar a recorrência.');
         }
+
+        if (scope === 'all') {
+          const { error: txUpdateError } = await supabase
+            .from('transactions')
+            .update({
+              transaction_type: input.transaction_type,
+              amount: input.amount,
+              category_id: input.category_id,
+              description: input.description,
+            })
+            .eq('recurring_transaction_id', recurrence.id)
+            .eq('user_id', userData.user.id);
+
+          if (txUpdateError) {
+            console.error('Erro ao atualizar transações passadas:', txUpdateError);
+            throw new Error(
+              'Não foi possível atualizar as transações passadas vinculadas.',
+            );
+          }
+
+          if (
+            recurrence.transaction_type === 'expense' ||
+            input.transaction_type === 'expense'
+          ) {
+            notifyBudgetActivity('check');
+          }
+        }
       } else {
         const { error: insertError } = await supabase
           .from('recurring_transactions')
@@ -218,7 +289,10 @@ export function RecurrenceForm({
         getSafeUserErrorMessage(
           err,
           'Não foi possível salvar a recorrência.',
-          ['Você precisa estar autenticado para salvar uma recorrência.'],
+          [
+            'Você precisa estar autenticado para salvar uma recorrência.',
+            'Não foi possível atualizar as transações passadas vinculadas.',
+          ],
         ),
       );
     } finally {
@@ -234,12 +308,18 @@ export function RecurrenceForm({
           <div className="mb-6 flex items-start justify-between gap-4">
             <div className="space-y-1">
               <Dialog.Title className="text-xl font-semibold">
-                {isEditing ? 'Editar recorrência' : 'Nova recorrência'}
+                {step === 'confirm_scope'
+                  ? 'Aplicar alterações'
+                  : isEditing
+                    ? 'Editar recorrência'
+                    : 'Nova recorrência'}
               </Dialog.Title>
               <Dialog.Description className="text-sm text-muted-foreground">
-                {isEditing
-                  ? 'As alterações serão aplicadas às próximas ocorrências.'
-                  : 'Defina os dados e a frequência dos próximos lançamentos.'}
+                {step === 'confirm_scope'
+                  ? 'Escolha se as alterações devem afetar também as transações já geradas.'
+                  : isEditing
+                    ? 'Defina os novos dados para esta transação recorrente.'
+                    : 'Defina os dados e a frequência dos próximos lançamentos.'}
               </Dialog.Description>
             </div>
             <Button
@@ -248,159 +328,289 @@ export function RecurrenceForm({
               size="icon"
               aria-label="Fechar formulário"
               onClick={() => handleOpenChange(false)}
-              disabled={isLoading}
+              disabled={isLoading || isValidating}
             >
               <X aria-hidden="true" />
             </Button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid gap-2">
-              <Label>Tipo</Label>
-              <div
-                role="group"
-                aria-label="Tipo de transação recorrente"
-                className="grid grid-cols-2 gap-1 rounded-lg border bg-muted p-1"
-              >
-                {(['expense', 'income'] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    aria-pressed={transactionType === type}
-                    onClick={() => {
-                      setTransactionType(type);
-                      const nextCategory = categories.find(
-                        (category) => category.category_type === type,
-                      );
-                      setCategoryId(nextCategory?.id ?? '');
-                    }}
-                    disabled={isLoading}
-                    className={`rounded-md py-2 text-sm font-medium transition-colors ${
-                      transactionType === type
-                        ? type === 'income'
-                          ? 'bg-background text-green-600 shadow-xs'
-                          : 'bg-background text-red-600 shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {type === 'income' ? 'Receita' : 'Despesa'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="recurrence-amount">Valor</Label>
-                <Input
-                  id="recurrence-amount"
-                  type="number"
-                  min="0.01"
-                  max="9999999999.99"
-                  step="0.01"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="recurrence-category">Categoria</Label>
-                <select
-                  id="recurrence-category"
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.target.value)}
-                  disabled={isLoading || availableCategories.length === 0}
-                  required
-                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="" disabled>
-                    {availableCategories.length === 0
-                      ? 'Nenhuma categoria disponível'
-                      : 'Selecione uma categoria'}
-                  </option>
-                  {availableCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="recurrence-frequency">Frequência</Label>
-                <select
-                  id="recurrence-frequency"
-                  value={frequency}
-                  onChange={(event) =>
-                    setFrequency(event.target.value as Frequency)
-                  }
-                  disabled={isLoading}
-                  className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  <option value="daily">Diária</option>
-                  <option value="weekly">Semanal</option>
-                  <option value="monthly">Mensal</option>
-                </select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="recurrence-start-date">Data de início</Label>
-                <Input
-                  id="recurrence-start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="recurrence-description">
-                Descrição (opcional)
-              </Label>
-              <Input
-                id="recurrence-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                maxLength={500}
-                placeholder="Ex.: mensalidade do serviço"
-                disabled={isLoading}
-              />
-            </div>
-
-            {error && (
-              <p role="alert" className="text-sm font-medium text-destructive">
-                {error}
+          {step === 'confirm_scope' ? (
+            <div className="space-y-5">
+              <p className="text-sm">
+                Esta série recorrente já possui{' '}
+                <strong className="font-semibold text-foreground">
+                  {pastTransactionsCount}{' '}
+                  {pastTransactionsCount === 1
+                    ? 'transação gerada anteriormente'
+                    : 'transações geradas anteriormente'}
+                </strong>
+                . Como você deseja aplicar as alterações?
               </p>
-            )}
 
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-                disabled={isLoading}
+              <div
+                className="space-y-2"
+                role="radiogroup"
+                aria-label="Escopo da alteração"
               >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isLoading || availableCategories.length === 0}
-              >
-                {isLoading
-                  ? 'Salvando...'
-                  : isEditing
-                    ? 'Salvar alterações'
-                    : 'Criar recorrência'}
-              </Button>
+                <label
+                  className={`flex items-start gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${
+                    editScope === 'future'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-input hover:bg-muted/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="edit-scope"
+                    value="future"
+                    checked={editScope === 'future'}
+                    onChange={() => setEditScope('future')}
+                    disabled={isLoading}
+                    className="mt-1"
+                  />
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium text-foreground">
+                      Somente a partir desta edição
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      As {pastTransactionsCount} transações passadas serão
+                      mantidas como estão. As alterações serão aplicadas apenas
+                      aos próximos lançamentos.
+                    </p>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${
+                    editScope === 'all'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-input hover:bg-muted/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="edit-scope"
+                    value="all"
+                    checked={editScope === 'all'}
+                    onChange={() => setEditScope('all')}
+                    disabled={isLoading}
+                    className="mt-1"
+                  />
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium text-foreground">
+                      Todas as ocorrências (passadas e futuras)
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Atualiza o valor, categoria, tipo e descrição das{' '}
+                      {pastTransactionsCount} transações já registradas e aplica
+                      aos próximos lançamentos.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {error && (
+                <p
+                  role="alert"
+                  className="text-sm font-medium text-destructive"
+                >
+                  {error}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setStep('form');
+                    setError(null);
+                  }}
+                  disabled={isLoading}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const validation = recurrenceSchema.safeParse({
+                      transaction_type: transactionType,
+                      amount,
+                      category_id: categoryId,
+                      frequency,
+                      start_date: startDate,
+                      description,
+                    });
+                    if (validation.success) {
+                      executeSave(validation.data, editScope);
+                    }
+                  }}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Salvando...' : 'Confirmar e salvar'}
+                </Button>
+              </div>
             </div>
-          </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid gap-2">
+                <Label>Tipo</Label>
+                <div
+                  role="group"
+                  aria-label="Tipo de transação recorrente"
+                  className="grid grid-cols-2 gap-1 rounded-lg border bg-muted p-1"
+                >
+                  {(['expense', 'income'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={transactionType === type}
+                      onClick={() => {
+                        setTransactionType(type);
+                        const nextCategory = categories.find(
+                          (category) => category.category_type === type,
+                        );
+                        setCategoryId(nextCategory?.id ?? '');
+                      }}
+                      disabled={isLoading || isValidating}
+                      className={`rounded-md py-2 text-sm font-medium transition-colors ${
+                        transactionType === type
+                          ? type === 'income'
+                            ? 'bg-background text-green-600 shadow-xs'
+                            : 'bg-background text-red-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {type === 'income' ? 'Receita' : 'Despesa'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-amount">Valor</Label>
+                  <Input
+                    id="recurrence-amount"
+                    type="number"
+                    min="0.01"
+                    max="9999999999.99"
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    disabled={isLoading || isValidating}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-category">Categoria</Label>
+                  <select
+                    id="recurrence-category"
+                    value={categoryId}
+                    onChange={(event) => setCategoryId(event.target.value)}
+                    disabled={
+                      isLoading ||
+                      isValidating ||
+                      availableCategories.length === 0
+                    }
+                    required
+                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="" disabled>
+                      {availableCategories.length === 0
+                        ? 'Nenhuma categoria disponível'
+                        : 'Selecione uma categoria'}
+                    </option>
+                    {availableCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-frequency">Frequência</Label>
+                  <select
+                    id="recurrence-frequency"
+                    value={frequency}
+                    onChange={(event) =>
+                      setFrequency(event.target.value as Frequency)
+                    }
+                    disabled={isLoading || isValidating}
+                    className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <option value="daily">Diária</option>
+                    <option value="weekly">Semanal</option>
+                    <option value="monthly">Mensal</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="recurrence-start-date">Data de início</Label>
+                  <Input
+                    id="recurrence-start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(event) => setStartDate(event.target.value)}
+                    disabled={isLoading || isValidating}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="recurrence-description">
+                  Descrição (opcional)
+                </Label>
+                <Input
+                  id="recurrence-description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  maxLength={500}
+                  placeholder="Ex.: mensalidade do serviço"
+                  disabled={isLoading || isValidating}
+                />
+              </div>
+
+              {error && (
+                <p
+                  role="alert"
+                  className="text-sm font-medium text-destructive"
+                >
+                  {error}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleOpenChange(false)}
+                  disabled={isLoading || isValidating}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    isLoading ||
+                    isValidating ||
+                    availableCategories.length === 0
+                  }
+                >
+                  {isLoading || isValidating
+                    ? 'Salvando...'
+                    : isEditing
+                      ? 'Salvar alterações'
+                      : 'Criar recorrência'}
+                </Button>
+              </div>
+            </form>
+          )}
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

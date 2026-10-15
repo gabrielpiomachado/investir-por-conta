@@ -7,6 +7,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CalendarClock,
+  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -22,6 +23,7 @@ import {
 } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
+import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import type { Database } from '@/types/database.types';
 import { RecurrenceForm } from './recurrence-form';
 
@@ -64,11 +66,42 @@ export function RecurrenceManager({
   );
   const [cancelingRecurrence, setCancelingRecurrence] =
     useState<Recurrence | null>(null);
+  const [deleteScope, setDeleteScope] = useState<
+    'keep_transactions' | 'delete_all'
+  >('keep_transactions');
+  const [associatedCount, setAssociatedCount] = useState<number | null>(null);
+  const [isLoadingCount, setIsLoadingCount] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
   const router = useRouter();
 
-  const handleCancel = async () => {
+  const handleOpenDelete = async (recurrence: Recurrence) => {
+    setCancelError(null);
+    setCancelingRecurrence(recurrence);
+    setDeleteScope('keep_transactions');
+    setIsLoadingCount(true);
+    setAssociatedCount(null);
+
+    try {
+      const supabase = createClient();
+      const { count, error } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('recurring_transaction_id', recurrence.id);
+
+      if (error) {
+        setAssociatedCount(0);
+      } else {
+        setAssociatedCount(count ?? 0);
+      }
+    } catch {
+      setAssociatedCount(0);
+    } finally {
+      setIsLoadingCount(false);
+    }
+  };
+
+  const handleDelete = async () => {
     if (!cancelingRecurrence) return;
 
     setIsCanceling(true);
@@ -81,31 +114,69 @@ export function RecurrenceManager({
 
       if (userError || !userData.user) {
         throw new Error(
-          'Você precisa estar autenticado para cancelar uma recorrência.',
+          'Você precisa estar autenticado para excluir uma recorrência.',
         );
       }
 
-      const { error: updateError } = await supabase
-        .from('recurring_transactions')
-        .update({ is_active: false })
-        .eq('id', cancelingRecurrence.id)
-        .eq('user_id', userData.user.id)
-        .eq('is_active', true)
-        .select('id')
-        .single();
+      if (
+        deleteScope === 'delete_all' &&
+        associatedCount &&
+        associatedCount > 0
+      ) {
+        const { error: deleteTxError } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('recurring_transaction_id', cancelingRecurrence.id)
+          .eq('user_id', userData.user.id);
 
-      if (updateError) {
-        throw new Error('Não foi possível cancelar a recorrência.');
+        if (deleteTxError) {
+          throw new Error('Não foi possível excluir as transações geradas.');
+        }
+
+        const { error: deleteRecurrenceError } = await supabase
+          .from('recurring_transactions')
+          .delete()
+          .eq('id', cancelingRecurrence.id)
+          .eq('user_id', userData.user.id);
+
+        if (deleteRecurrenceError) {
+          await supabase
+            .from('recurring_transactions')
+            .update({ is_active: false })
+            .eq('id', cancelingRecurrence.id)
+            .eq('user_id', userData.user.id);
+        }
+      } else {
+        const { error: updateError } = await supabase
+          .from('recurring_transactions')
+          .update({ is_active: false })
+          .eq('id', cancelingRecurrence.id)
+          .eq('user_id', userData.user.id)
+          .eq('is_active', true)
+          .select('id')
+          .single();
+
+        if (updateError) {
+          throw new Error('Não foi possível excluir a recorrência.');
+        }
+      }
+
+      if (cancelingRecurrence.transaction_type === 'expense') {
+        notifyBudgetActivity('check');
       }
 
       setCancelingRecurrence(null);
+      setAssociatedCount(null);
       router.refresh();
     } catch (err: unknown) {
       setCancelError(
         getSafeUserErrorMessage(
           err,
-          'Não foi possível cancelar a recorrência.',
-          ['Você precisa estar autenticado para cancelar uma recorrência.'],
+          'Não foi possível excluir a recorrência.',
+          [
+            'Você precisa estar autenticado para excluir uma recorrência.',
+            'Não foi possível excluir as transações geradas.',
+          ],
         ),
       );
     } finally {
@@ -220,13 +291,10 @@ export function RecurrenceManager({
                             type="button"
                             variant="ghost"
                             size="icon"
-                            aria-label="Cancelar recorrência"
-                            title="Cancelar recorrência"
+                            aria-label="Excluir recorrência"
+                            title="Excluir recorrência"
                             className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => {
-                              setCancelError(null);
-                              setCancelingRecurrence(recurrence);
-                            }}
+                            onClick={() => handleOpenDelete(recurrence)}
                           >
                             <Trash2 aria-hidden="true" />
                           </Button>
@@ -294,6 +362,7 @@ export function RecurrenceManager({
           if (!open && !isCanceling) {
             setCancelingRecurrence(null);
             setCancelError(null);
+            setAssociatedCount(null);
           }
         }}
       >
@@ -303,11 +372,12 @@ export function RecurrenceManager({
             <div className="mb-6 flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <Dialog.Title className="text-xl font-semibold">
-                  Cancelar recorrência
+                  Excluir recorrência
                 </Dialog.Title>
                 <Dialog.Description className="text-sm text-muted-foreground">
-                  As transações já geradas serão preservadas. Nenhuma nova
-                  transação será criada.
+                  {associatedCount && associatedCount > 0
+                    ? 'Escolha como deseja proceder com as transações já geradas.'
+                    : 'Nenhum lançamento futuro será gerado para esta série.'}
                 </Dialog.Description>
               </div>
               <Button
@@ -316,7 +386,11 @@ export function RecurrenceManager({
                 size="icon"
                 aria-label="Fechar confirmação"
                 onClick={() => {
-                  if (!isCanceling) setCancelingRecurrence(null);
+                  if (!isCanceling) {
+                    setCancelingRecurrence(null);
+                    setCancelError(null);
+                    setAssociatedCount(null);
+                  }
                 }}
                 disabled={isCanceling}
               >
@@ -324,10 +398,98 @@ export function RecurrenceManager({
               </Button>
             </div>
 
-            <p className="mb-4 text-sm">
-              {cancelingRecurrence?.description || 'Esta série recorrente'} será
-              cancelada.
-            </p>
+            {isLoadingCount && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <Loader2 aria-hidden="true" className="size-4 animate-spin text-primary" />
+                <span>Verificando transações geradas...</span>
+              </div>
+            )}
+
+            {!isLoadingCount && associatedCount !== null && associatedCount > 0 && (
+              <div className="mb-4 space-y-3">
+                <p className="text-sm">
+                  Esta recorrência possui{' '}
+                  <strong className="font-semibold text-foreground">
+                    {associatedCount}{' '}
+                    {associatedCount === 1
+                      ? 'transação gerada anteriormente'
+                      : 'transações geradas anteriormente'}
+                  </strong>
+                  . O que você deseja fazer?
+                </p>
+
+                <div
+                  className="space-y-2"
+                  role="radiogroup"
+                  aria-label="Opções de exclusão de transações geradas"
+                >
+                  <label
+                    className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      deleteScope === 'keep_transactions'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-input hover:bg-muted/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="delete-scope"
+                      value="keep_transactions"
+                      checked={deleteScope === 'keep_transactions'}
+                      onChange={() => setDeleteScope('keep_transactions')}
+                      disabled={isCanceling}
+                      className="mt-1"
+                    />
+                    <div className="space-y-0.5 text-xs">
+                      <p className="font-medium text-foreground">
+                        Manter transações geradas
+                      </p>
+                      <p className="text-muted-foreground">
+                        Cancela a recorrência para não gerar novas transações.
+                        As {associatedCount} transações já criadas serão
+                        preservadas no seu histórico.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      deleteScope === 'delete_all'
+                        ? 'border-destructive bg-destructive/5 ring-1 ring-destructive'
+                        : 'border-input hover:bg-muted/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="delete-scope"
+                      value="delete_all"
+                      checked={deleteScope === 'delete_all'}
+                      onChange={() => setDeleteScope('delete_all')}
+                      disabled={isCanceling}
+                      className="mt-1"
+                    />
+                    <div className="space-y-0.5 text-xs">
+                      <p className="font-medium text-destructive">
+                        Apagar recorrência e transações geradas
+                      </p>
+                      <p className="text-muted-foreground">
+                        Exclui a recorrência e apaga permanentemente as{' '}
+                        {associatedCount} transações já criadas no seu
+                        histórico financeiro.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {!isLoadingCount &&
+              (associatedCount === null || associatedCount === 0) && (
+                <p className="mb-4 text-sm text-muted-foreground">
+                  {cancelingRecurrence?.description || 'Esta série recorrente'}{' '}
+                  será excluída. Nenhuma transação foi gerada por ela ainda.
+                </p>
+              )}
+
             {cancelError && (
               <p
                 role="alert"
@@ -336,22 +498,33 @@ export function RecurrenceManager({
                 {cancelError}
               </p>
             )}
+
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setCancelingRecurrence(null)}
+                onClick={() => {
+                  setCancelingRecurrence(null);
+                  setCancelError(null);
+                  setAssociatedCount(null);
+                }}
                 disabled={isCanceling}
               >
-                Manter recorrência
+                Cancelar
               </Button>
               <Button
                 type="button"
                 variant="destructive"
-                onClick={handleCancel}
-                disabled={isCanceling}
+                onClick={handleDelete}
+                disabled={isCanceling || isLoadingCount}
               >
-                {isCanceling ? 'Cancelando...' : 'Confirmar cancelamento'}
+                {isCanceling
+                  ? 'Excluindo...'
+                  : deleteScope === 'delete_all' &&
+                      associatedCount &&
+                      associatedCount > 0
+                    ? 'Excluir tudo'
+                    : 'Excluir recorrência'}
               </Button>
             </div>
           </Dialog.Popup>
