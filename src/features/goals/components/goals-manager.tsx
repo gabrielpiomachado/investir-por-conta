@@ -89,10 +89,8 @@ export function GoalsManager({ goals, availableBalance }: GoalsManagerProps) {
 
       setDeletingGoal(null);
       router.refresh();
-    } catch (err: unknown) {
-      setDeleteError(
-        err instanceof Error ? err.message : 'Não foi possível excluir a meta.',
-      );
+    } catch {
+      setDeleteError('Não foi possível excluir a meta. Tente novamente.');
     } finally {
       setIsDeleting(false);
     }

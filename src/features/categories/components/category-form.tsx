@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Dialog } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { categorySchema } from '../schemas/category.schema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,9 +108,14 @@ export function CategoryForm({
       router.refresh();
     } catch (err: unknown) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível salvar a categoria.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível salvar a categoria.',
+          [
+            'Você precisa estar autenticado para salvar uma categoria.',
+            'Você já possui uma categoria com este nome.',
+          ],
+        ),
       );
     } finally {
       setIsLoading(false);

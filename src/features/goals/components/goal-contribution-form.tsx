@@ -73,27 +73,25 @@ export function GoalContributionForm({
         const currentAvailable = availableValue
           ? Number(availableValue)
           : availableBalance;
-        throw new Error(
+        setError(
           `Saldo insuficiente. Saldo disponível: ${currencyFormatter.format(currentAvailable)}.`,
         );
+        return;
       }
 
       if (contributionError) {
-        throw new Error(
+        setError(
           contributionError.message === 'GOAL_NOT_FOUND'
             ? 'Esta meta não está mais disponível.'
             : 'Não foi possível registrar o aporte. Tente novamente.',
         );
+        return;
       }
 
       onOpenChange(false);
       router.refresh();
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível registrar o aporte.',
-      );
+    } catch {
+      setError('Não foi possível registrar o aporte. Tente novamente.');
     } finally {
       setIsLoading(false);
     }

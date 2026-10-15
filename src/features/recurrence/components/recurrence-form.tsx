@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import type { Database } from '@/types/database.types';
 import { recurrenceSchema } from '../schemas/recurrence.schema';
@@ -214,9 +215,11 @@ export function RecurrenceForm({
       router.refresh();
     } catch (err: unknown) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível salvar a recorrência.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível salvar a recorrência.',
+          ['Você precisa estar autenticado para salvar uma recorrência.'],
+        ),
       );
     } finally {
       setIsLoading(false);

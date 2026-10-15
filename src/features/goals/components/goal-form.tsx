@@ -71,9 +71,9 @@ export function GoalForm({ goal, open, onOpenChange }: GoalFormProps) {
 
       onOpenChange(false);
       router.refresh();
-    } catch (err: unknown) {
+    } catch {
       setError(
-        err instanceof Error ? err.message : 'Não foi possível salvar a meta.',
+        'Não foi possível salvar a meta. Tente novamente.',
       );
     } finally {
       setIsLoading(false);

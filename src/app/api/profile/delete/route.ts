@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { serverEnv } from '@/lib/env.server';
+import { createRequestId, logServerEvent } from '@/lib/server-logger';
 
 const deletionRequestSchema = z.object({
   password: z.string().min(1),
@@ -11,10 +12,12 @@ const deletionRequestSchema = z.object({
 const noStoreHeaders = { 'Cache-Control': 'no-store' };
 
 export async function POST(request: Request) {
+  const requestId = createRequestId();
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user?.email) {
+    logServerEvent('profile.delete', 'rejected', requestId);
     return Response.json(
       { error: 'Não autenticado.' },
       { status: 401, headers: noStoreHeaders },
@@ -26,6 +29,7 @@ export async function POST(request: Request) {
   try {
     requestBody = await request.json();
   } catch {
+    logServerEvent('profile.delete', 'rejected', requestId);
     return Response.json(
       { error: 'Solicitação inválida.' },
       { status: 400, headers: noStoreHeaders },
@@ -35,6 +39,7 @@ export async function POST(request: Request) {
   const parsedRequest = deletionRequestSchema.safeParse(requestBody);
 
   if (!parsedRequest.success) {
+    logServerEvent('profile.delete', 'rejected', requestId);
     return Response.json(
       { error: 'Informe sua senha atual para confirmar a exclusão.' },
       { status: 400, headers: noStoreHeaders },
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
     const normalizedError = verificationError.message.toLowerCase();
 
     if (normalizedError.includes('rate limit')) {
+      logServerEvent('profile.delete', 'rejected', requestId);
       return Response.json(
         { error: 'Muitas tentativas. Aguarde um pouco e tente novamente.' },
         { status: 429, headers: noStoreHeaders },
@@ -72,12 +78,14 @@ export async function POST(request: Request) {
       normalizedError.includes('invalid login credentials') ||
       normalizedError.includes('invalid_credentials')
     ) {
+      logServerEvent('profile.delete', 'rejected', requestId);
       return Response.json(
         { error: 'A senha informada está incorreta.' },
         { status: 401, headers: noStoreHeaders },
       );
     }
 
+    logServerEvent('profile.delete', 'failure', requestId);
     return Response.json(
       { error: 'Não foi possível validar sua senha. Tente novamente.' },
       { status: 502, headers: noStoreHeaders },
@@ -85,6 +93,7 @@ export async function POST(request: Request) {
   }
 
   if (verifiedData.user?.id !== data.user.id) {
+    logServerEvent('profile.delete', 'rejected', requestId);
     return Response.json(
       { error: 'A senha informada está incorreta.' },
       { status: 401, headers: noStoreHeaders },
@@ -107,12 +116,14 @@ export async function POST(request: Request) {
   );
 
   if (deletionError) {
+    logServerEvent('profile.delete', 'failure', requestId);
     return Response.json(
       { error: 'Não foi possível excluir sua conta. Tente novamente.' },
       { status: 500, headers: noStoreHeaders },
     );
   }
 
+  logServerEvent('profile.delete', 'success', requestId);
   return Response.json(
     { success: true },
     { headers: noStoreHeaders },

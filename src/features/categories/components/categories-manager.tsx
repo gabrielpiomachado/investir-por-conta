@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -79,9 +80,11 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
       router.refresh();
     } catch (err: unknown) {
       setDeleteError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível excluir a categoria.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível excluir a categoria.',
+          ['Você precisa estar autenticado para excluir uma categoria.'],
+        ),
       );
     } finally {
       setIsDeleting(false);

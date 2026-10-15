@@ -135,12 +135,8 @@ export function ProfileSettings({ account }: ProfileSettingsProps) {
       }
 
       router.replace('/');
-    } catch (error) {
-      setDeleteError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível excluir sua conta. Tente novamente.',
-      );
+    } catch {
+      setDeleteError('Não foi possível excluir sua conta. Tente novamente.');
     } finally {
       setIsDeletingAccount(false);
     }

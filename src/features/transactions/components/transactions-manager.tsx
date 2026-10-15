@@ -28,6 +28,7 @@ import {
 import { Label } from '@/components/ui/label';
 import type { Category } from '@/features/categories/components/category-form';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import { TransactionForm, type TransactionRecord } from './transaction-form';
 
@@ -263,9 +264,7 @@ export function TransactionsManager({
         .single();
 
       if (deleteError) {
-        throw new Error(
-          `Não foi possível excluir a transação: ${deleteError.message}`,
-        );
+        throw new Error('Não foi possível excluir a transação.');
       }
 
       if (deletingTransaction.transaction_type === 'expense') {
@@ -276,9 +275,11 @@ export function TransactionsManager({
       router.refresh();
     } catch (err: unknown) {
       setDeleteError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível excluir a transação.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível excluir a transação.',
+          ['Você precisa estar autenticado para excluir uma transação.'],
+        ),
       );
     } finally {
       setIsDeleting(false);

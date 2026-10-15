@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database.types';
+import { createRequestId, logServerEvent } from '@/lib/server-logger';
 
 const PAGE_SIZE = 1000;
 
@@ -41,10 +42,12 @@ async function loadAllRows(
 }
 
 export async function GET() {
+  const requestId = createRequestId();
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {
+    logServerEvent('profile.export', 'rejected', requestId);
     return Response.json({ error: 'Não autenticado.' }, { status: 401 });
   }
 
@@ -83,6 +86,7 @@ export async function GET() {
     };
 
     const date = new Date().toISOString().slice(0, 10);
+    logServerEvent('profile.export', 'success', requestId);
     return new Response(JSON.stringify(exportData, null, 2), {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
@@ -92,6 +96,7 @@ export async function GET() {
       },
     });
   } catch {
+    logServerEvent('profile.export', 'failure', requestId);
     return Response.json(
       { error: 'Não foi possível preparar a exportação dos seus dados.' },
       {

@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { cn } from '@/lib/utils';
 import { notifyBudgetActivity } from '../lib/budget-alerts';
 import {
@@ -122,9 +123,11 @@ export function BudgetsManager({
       router.refresh();
     } catch (err: unknown) {
       setDeleteError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível excluir o orçamento.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível excluir o orçamento.',
+          ['Você precisa estar autenticado para excluir um orçamento.'],
+        ),
       );
     } finally {
       setIsDeleting(false);

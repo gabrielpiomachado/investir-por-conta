@@ -21,6 +21,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import type { Database } from '@/types/database.types';
 import { RecurrenceForm } from './recurrence-form';
 
@@ -101,9 +102,11 @@ export function RecurrenceManager({
       router.refresh();
     } catch (err: unknown) {
       setCancelError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível cancelar a recorrência.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível cancelar a recorrência.',
+          ['Você precisa estar autenticado para cancelar uma recorrência.'],
+        ),
       );
     } finally {
       setIsCanceling(false);

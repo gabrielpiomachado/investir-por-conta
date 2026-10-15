@@ -67,6 +67,6 @@ export function getAuthErrorMessage(error: unknown): string {
 
   return (
     localizedError?.message ??
-    `Não foi possível concluir a solicitação. Detalhes: ${message}`
+    'Não foi possível concluir a solicitação. Tente novamente.'
   );
 }

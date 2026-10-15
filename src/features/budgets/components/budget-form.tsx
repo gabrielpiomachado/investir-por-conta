@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { budgetSchema } from '../schemas/budget.schema';
 import type { Budget, BudgetCategory } from '../lib/budget-progress';
 import { notifyBudgetActivity } from '../lib/budget-alerts';
@@ -131,9 +132,14 @@ export function BudgetForm({
       router.refresh();
     } catch (err: unknown) {
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Não foi possível salvar o orçamento.',
+        getSafeUserErrorMessage(
+          err,
+          'Não foi possível salvar o orçamento.',
+          [
+            'Você precisa estar autenticado para salvar um orçamento.',
+            'Esta categoria já possui um orçamento.',
+          ],
+        ),
       );
     } finally {
       setIsLoading(false);

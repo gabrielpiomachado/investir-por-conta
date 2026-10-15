@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { getSafeUserErrorMessage } from '@/lib/safe-user-error';
 import { notifyBudgetActivity } from '@/features/budgets/lib/budget-alerts';
 import { transactionSchema } from '../schemas/transaction.schema';
 import type { Category } from '@/features/categories/components/category-form';
@@ -130,9 +131,7 @@ export function TransactionForm({
           .single();
 
         if (updateError) {
-          throw new Error(
-            `Não foi possível atualizar a transação: ${updateError.message}`,
-          );
+          throw new Error('Não foi possível atualizar a transação.');
         }
       } else {
         const { error: insertError } = await supabase
@@ -143,9 +142,7 @@ export function TransactionForm({
           });
 
         if (insertError) {
-            throw new Error(
-              `Não foi possível registrar a transação: ${insertError.message}`,
-            );
+          throw new Error('Não foi possível registrar a transação.');
         }
       }
 
@@ -159,11 +156,20 @@ export function TransactionForm({
       router.refresh();
     } catch (err: unknown) {
       setError(
-        err instanceof Error
-          ? err.message
-          : `Não foi possível ${
+        getSafeUserErrorMessage(
+          err,
+          `Não foi possível ${
+            isEditing ? 'atualizar' : 'registrar'
+          } a transação.`,
+          [
+            `Você precisa estar autenticado para ${
               isEditing ? 'atualizar' : 'registrar'
-            } a transação.`,
+            } uma transação.`,
+            isEditing
+              ? 'Não foi possível atualizar a transação.'
+              : 'Não foi possível registrar a transação.',
+          ],
+        ),
       );
     } finally {
       setIsLoading(false);
