@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { getAuthErrorMessage } from '@/features/auth/lib/auth-error-message';
+import { signInSchema } from '@/features/auth/schemas/auth.schema';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -29,14 +30,21 @@ export function SignInForm({
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    const validation = signInSchema.safeParse({ email, password });
+    if (!validation.success) {
+      setError(validation.error.issues[0]?.message ?? 'Dados inválidos.');
+      return;
+    }
+
     const supabase = createClient();
     setIsLoading(true);
-    setError(null);
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: validation.data.email,
+        password: validation.data.password,
       });
       if (error) throw error;
       router.push('/dashboard');

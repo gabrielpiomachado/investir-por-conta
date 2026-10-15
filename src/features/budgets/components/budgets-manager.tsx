@@ -323,7 +323,7 @@ export function BudgetsManager({
                           )}
                         >
                           {isExceeded
-                            ? 'Excedido'
+                            ? `${percentage.toFixed(0)}% (Excedido)`
                             : `${percentage.toFixed(0)}%`}
                         </p>
                       </div>

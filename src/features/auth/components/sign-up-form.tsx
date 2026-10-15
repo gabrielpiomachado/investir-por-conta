@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { getAuthErrorMessage } from '@/features/auth/lib/auth-error-message';
+import { signUpSchema } from '@/features/auth/schemas/auth.schema';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -33,13 +34,15 @@ export function SignUpForm({
     e.preventDefault();
     setError(null);
 
-    if (!hasAcceptedLegal) {
-      setError('Você precisa aceitar os Termos de Uso e a Política de Privacidade.');
-      return;
-    }
+    const validation = signUpSchema.safeParse({
+      email,
+      password,
+      repeatPassword,
+      hasAcceptedLegal,
+    });
 
-    if (password !== repeatPassword) {
-      setError('As senhas não coincidem.');
+    if (!validation.success) {
+      setError(validation.error.issues[0]?.message ?? 'Dados inválidos.');
       return;
     }
 
@@ -48,8 +51,8 @@ export function SignUpForm({
 
     try {
       const { error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: validation.data.email,
+        password: validation.data.password,
         options: {
           emailRedirectTo: `${window.location.origin}/callback?next=/dashboard`,
           data: {

@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { getAuthErrorMessage } from '@/features/auth/lib/auth-error-message';
+import { updatePasswordSchema } from '@/features/auth/schemas/auth.schema';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -27,12 +28,21 @@ export function UpdatePasswordForm({
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
-    setIsLoading(true);
     setError(null);
 
+    const validation = updatePasswordSchema.safeParse({ password });
+    if (!validation.success) {
+      setError(validation.error.issues[0]?.message ?? 'Dados inválidos.');
+      return;
+    }
+
+    const supabase = createClient();
+    setIsLoading(true);
+
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      const { error } = await supabase.auth.updateUser({
+        password: validation.data.password,
+      });
       if (error) throw error;
       router.push('/dashboard');
     } catch (error: unknown) {

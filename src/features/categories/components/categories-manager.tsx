@@ -73,6 +73,17 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
         .single();
 
       if (deleteError) {
+        if (deleteError.code === '23503') {
+          const detail = `${deleteError.message} ${deleteError.details ?? ''}`.toLowerCase();
+          if (detail.includes('budget')) {
+            throw new Error(
+              'Não é permitido excluir uma categoria que possua orçamento ativo vinculado.',
+            );
+          }
+          throw new Error(
+            'Não é permitido excluir uma categoria que possua transações vinculadas.',
+          );
+        }
         throw new Error('Não foi possível excluir a categoria.');
       }
 
@@ -83,7 +94,11 @@ export function CategoriesManager({ categories }: CategoriesManagerProps) {
         getSafeUserErrorMessage(
           err,
           'Não foi possível excluir a categoria.',
-          ['Você precisa estar autenticado para excluir uma categoria.'],
+          [
+            'Você precisa estar autenticado para excluir uma categoria.',
+            'Não é permitido excluir uma categoria que possua orçamento ativo vinculado.',
+            'Não é permitido excluir uma categoria que possua transações vinculadas.',
+          ],
         ),
       );
     } finally {

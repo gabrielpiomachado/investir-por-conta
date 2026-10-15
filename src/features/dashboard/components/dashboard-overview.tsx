@@ -566,7 +566,9 @@ export function DashboardOverview({
                         <span
                           className={`shrink-0 text-xs font-semibold tabular-nums ${exceeded ? 'text-destructive' : 'text-muted-foreground'}`}
                         >
-                          {exceeded ? 'Excedido' : `${Math.round(percentage)}%`}
+                          {exceeded
+                            ? `${Math.round(percentage)}% (Excedido)`
+                            : `${Math.round(percentage)}%`}
                         </span>
                       </div>
                       <div
@@ -645,7 +647,7 @@ export function DashboardOverview({
                           {goal.name}
                         </p>
                         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                          {progress.toLocaleString('pt-BR', {
+                          {percentage.toLocaleString('pt-BR', {
                             maximumFractionDigits: 1,
                           })}
                           %
