@@ -12,6 +12,9 @@ Scripts disponíveis em `package.json`:
 - `pnpm check`: lint e typecheck.
 - `pnpm build`: build de produção.
 - `pnpm start`: servidor de produção após o build.
+- `pnpm db:sync`: sincroniza schemas declarativos gerando nova migration (pg-delta).
+- `pnpm db:types`: regenera as tipagens TypeScript do banco a partir do ambiente local.
+- `pnpm db:reset`: reseta o banco de dados local executando todas as migrações e o seed.
 
 Não há testes automatizados nem script `test`. Não invente resultados de testes nem instale ferramentas sem autorização. Há um `.prettierrc`, mas não há dependência ou script Prettier declarado; não presuma que exista um comando de formatação.
 
@@ -23,7 +26,8 @@ Não há testes automatizados nem script `test`. Não invente resultados de test
 - `src/lib/`: utilitários, validação de ambiente e integrações compartilhadas. Em `src/lib/supabase/`, `client.ts` é para o navegador, `server.ts` para servidor e `proxy.ts` para atualização de sessão.
 - `src/proxy.ts`: proxy do Next.js que conecta a atualização de sessão às requisições e aplica as regras de acesso.
 - `src/types/`: tipos compartilhados, incluindo os tipos do banco em `database.types.ts`.
-- `supabase/migrations/`: migrations SQL; `supabase/seed.sql`: dados de seed local.
+- `supabase/schemas/`: schemas SQL declarativos que representam o estado final desejado do banco (fonte da verdade).
+- `supabase/migrations/`: migrations SQL versionadas; `supabase/seed.sql`: dados de seed local.
 - `public/`: arquivos estáticos.
 
 Antes de criar arquivos ou abstrações, confira exemplos existentes e amplie a estrutura somente quando a funcionalidade justificar.
@@ -35,11 +39,12 @@ Antes de criar arquivos ou abstrações, confira exemplos existentes e amplie a 
 - Valide entradas com Zod e mantenha schemas específicos junto à feature. Para dados de usuário, trate erros de validação e de operações explicitamente.
 - Use `kebab-case` nos nomes de arquivos, `camelCase` em funções e variáveis e `PascalCase` em componentes e tipos. Respeite os nomes especiais exigidos pelo App Router e use `snake_case` para identificadores SQL conforme o schema existente.
 - Reutilize Tailwind CSS e os componentes em `src/components/ui/`. Siga ESLint, `tsconfig.json` e as preferências de formatação em `.prettierrc`.
-- Ao alterar o schema, crie uma nova migration sem editar migrations existentes e mantenha `src/types/database.types.ts` sincronizado. Preserve RLS e as políticas de acesso aos dados.
+- Ao alterar o schema do banco de dados, utilize o fluxo de declarative schemas: atualize a definição desejada em `supabase/schemas/` e execute `pnpm db:sync --name <nome_da_migration>` para que o motor `pg-delta` gere a nova migration correspondente em `supabase/migrations/`.
+- Nunca edite, exclua ou reescreva migrations existentes. Toda alteração necessária no schema deve ser registrada em uma nova migration gerada a partir dos schemas declarativos.
+- Mantenha `src/types/database.types.ts` sempre sincronizado via `pnpm db:types`.
+- Ao alterar o banco, avalie o impacto em RLS, políticas de acesso e isolamento dos dados de cada usuário. Não desative proteções para contornar erros.
 - Não exponha credenciais privadas, chaves `service_role` ou outros segredos no cliente. Não altere arquivos de ambiente nem execute operações destrutivas ou em bancos remotos sem autorização explícita.
 - Nunca instale, remova ou atualize dependências sem autorização explícita. Não altere manualmente o lockfile nem troque o gerenciador de pacotes.
-- Nunca edite, exclua ou reescreva migrations existentes. Toda alteração necessária no schema deve ser registrada em uma nova migration.
-- Ao alterar o banco, avalie o impacto em RLS, políticas de acesso e isolamento dos dados de cada usuário. Não desative proteções para contornar erros.
 - Não faça alterações fora do escopo solicitado sem necessidade justificada. Antes de criar abstrações ou reorganizar arquivos, verifique se a mudança é realmente necessária.
 
 ## Verificação
