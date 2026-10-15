@@ -343,6 +343,19 @@ export type Database = {
         };
         Returns: undefined;
       };
+      update_recurring_transaction: {
+        Args: {
+          p_amount: number;
+          p_category_id: string;
+          p_description?: string | null;
+          p_frequency: string;
+          p_recurrence_id: string;
+          p_scope?: string;
+          p_start_date: string;
+          p_transaction_type: Database['public']['Enums']['category_type'];
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       budget_period: 'monthly' | 'annual';

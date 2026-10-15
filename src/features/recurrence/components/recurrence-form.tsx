@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@base-ui/react/dialog';
-import { X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,44 +23,20 @@ type Category = Pick<
 >;
 type Frequency = 'daily' | 'weekly' | 'monthly';
 
-function getNextRunDate(
-  frequency: Frequency,
-  startDate: string,
-  currentNextRunDate: string,
-) {
-  const earliestDate =
-    startDate > currentNextRunDate ? startDate : currentNextRunDate;
-  const target = new Date(`${earliestDate}T00:00:00.000Z`);
-  const anchor = new Date(`${startDate}T00:00:00.000Z`);
+const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'medium',
+  timeZone: 'UTC',
+});
 
-  if (frequency === 'daily') return earliestDate;
-
-  if (frequency === 'weekly') {
-    const offset = (anchor.getUTCDay() - target.getUTCDay() + 7) % 7;
-    target.setUTCDate(target.getUTCDate() + offset);
-    return target.toISOString().slice(0, 10);
-  }
-
-  for (let monthOffset = 0; monthOffset < 12; monthOffset += 1) {
-    const month = new Date(
-      Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + monthOffset, 1),
-    );
-    const lastDay = new Date(
-      Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0),
-    ).getUTCDate();
-    const occurrence = new Date(
-      Date.UTC(
-        month.getUTCFullYear(),
-        month.getUTCMonth(),
-        Math.min(anchor.getUTCDate(), lastDay),
-      ),
-    );
-
-    if (occurrence >= target) return occurrence.toISOString().slice(0, 10);
-  }
-
-  return earliestDate;
+function formatDate(dateStr: string) {
+  return dateFormatter.format(new Date(`${dateStr}T00:00:00Z`));
 }
+
+const frequencyLabels: Record<Frequency, string> = {
+  daily: 'Diária',
+  weekly: 'Semanal',
+  monthly: 'Mensal',
+};
 
 type RecurrenceFormProps = {
   recurrence?: Recurrence;
@@ -101,6 +77,12 @@ export function RecurrenceForm({
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const isEditing = Boolean(recurrence);
+  const isStartDateChanged = recurrence
+    ? startDate !== recurrence.start_date
+    : false;
+  const isFrequencyChanged = recurrence
+    ? frequency !== recurrence.frequency
+    : false;
   const availableCategories = categories.filter(
     (category) => category.category_type === transactionType,
   );
@@ -144,7 +126,8 @@ export function RecurrenceForm({
 
         if (!countError && count && count > 0) {
           setPastTransactionsCount(count);
-          setEditScope('future');
+          const hasStartChanged = startDate !== recurrence.start_date;
+          setEditScope(hasStartChanged ? 'all' : 'future');
           setStep('confirm_scope');
           setIsValidating(false);
           return;
@@ -180,79 +163,33 @@ export function RecurrenceForm({
       const anchorDay = Number(input.start_date.slice(8, 10));
 
       if (recurrence) {
-        const { data: generatedCount, error: generationError } =
-          await supabase.rpc('generate_due_recurring_transactions');
+        const effectiveScope =
+          input.start_date !== recurrence.start_date ? 'all' : scope;
 
-        if (generationError) {
-          throw new Error('Não foi possível salvar a recorrência.');
-        }
-        if (generatedCount > 0) notifyBudgetActivity('check');
-
-        const { data: currentRecurrence, error: currentError } = await supabase
-          .from('recurring_transactions')
-          .select('next_run_date')
-          .eq('id', recurrence.id)
-          .eq('user_id', userData.user.id)
-          .eq('is_active', true)
-          .single();
-
-        if (currentError) {
-          throw new Error('Não foi possível salvar a recorrência.');
-        }
-
-        const nextRunDate = getNextRunDate(
-          input.frequency,
-          input.start_date,
-          currentRecurrence.next_run_date,
+        const { error: updateError } = await supabase.rpc(
+          'update_recurring_transaction',
+          {
+            p_recurrence_id: recurrence.id,
+            p_transaction_type: input.transaction_type,
+            p_amount: input.amount,
+            p_category_id: input.category_id,
+            p_frequency: input.frequency,
+            p_start_date: input.start_date,
+            p_description: input.description,
+            p_scope: effectiveScope,
+          },
         );
-        const { error: updateError } = await supabase
-          .from('recurring_transactions')
-          .update({
-            transaction_type: input.transaction_type,
-            amount: input.amount,
-            category_id: input.category_id,
-            frequency: input.frequency,
-            start_date: input.start_date,
-            next_run_date: nextRunDate,
-            monthly_anchor_day: anchorDay,
-            description: input.description,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', recurrence.id)
-          .eq('user_id', userData.user.id)
-          .eq('is_active', true)
-          .select('id')
-          .single();
 
         if (updateError) {
+          console.error('Erro ao atualizar recorrência:', updateError);
           throw new Error('Não foi possível salvar a recorrência.');
         }
 
-        if (scope === 'all') {
-          const { error: txUpdateError } = await supabase
-            .from('transactions')
-            .update({
-              transaction_type: input.transaction_type,
-              amount: input.amount,
-              category_id: input.category_id,
-              description: input.description,
-            })
-            .eq('recurring_transaction_id', recurrence.id)
-            .eq('user_id', userData.user.id);
-
-          if (txUpdateError) {
-            console.error('Erro ao atualizar transações passadas:', txUpdateError);
-            throw new Error(
-              'Não foi possível atualizar as transações passadas vinculadas.',
-            );
-          }
-
-          if (
-            recurrence.transaction_type === 'expense' ||
-            input.transaction_type === 'expense'
-          ) {
-            notifyBudgetActivity('check');
-          }
+        if (
+          recurrence.transaction_type === 'expense' ||
+          input.transaction_type === 'expense'
+        ) {
+          notifyBudgetActivity('check');
         }
       } else {
         const { error: insertError } = await supabase
@@ -291,7 +228,7 @@ export function RecurrenceForm({
           'Não foi possível salvar a recorrência.',
           [
             'Você precisa estar autenticado para salvar uma recorrência.',
-            'Não foi possível atualizar as transações passadas vinculadas.',
+            'Não foi possível salvar a recorrência.',
           ],
         ),
       );
@@ -309,14 +246,18 @@ export function RecurrenceForm({
             <div className="space-y-1">
               <Dialog.Title className="text-xl font-semibold">
                 {step === 'confirm_scope'
-                  ? 'Aplicar alterações'
+                  ? isStartDateChanged
+                    ? 'Redefinir histórico da recorrência'
+                    : 'Aplicar alterações'
                   : isEditing
                     ? 'Editar recorrência'
                     : 'Nova recorrência'}
               </Dialog.Title>
               <Dialog.Description className="text-sm text-muted-foreground">
                 {step === 'confirm_scope'
-                  ? 'Escolha se as alterações devem afetar também as transações já geradas.'
+                  ? isStartDateChanged
+                    ? 'A data de início foi alterada. O histórico desta série será reconstruído a partir da nova data.'
+                    : 'Escolha se as alterações devem afetar também as transações já geradas.'
                   : isEditing
                     ? 'Defina os novos dados para esta transação recorrente.'
                     : 'Defina os dados e a frequência dos próximos lançamentos.'}
@@ -335,122 +276,208 @@ export function RecurrenceForm({
           </div>
 
           {step === 'confirm_scope' ? (
-            <div className="space-y-5">
-              <p className="text-sm">
-                Esta série recorrente já possui{' '}
-                <strong className="font-semibold text-foreground">
-                  {pastTransactionsCount}{' '}
-                  {pastTransactionsCount === 1
-                    ? 'transação gerada anteriormente'
-                    : 'transações geradas anteriormente'}
-                </strong>
-                . Como você deseja aplicar as alterações?
-              </p>
-
-              <div
-                className="space-y-2"
-                role="radiogroup"
-                aria-label="Escopo da alteração"
-              >
-                <label
-                  className={`flex items-start gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${
-                    editScope === 'future'
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-input hover:bg-muted/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="edit-scope"
-                    value="future"
-                    checked={editScope === 'future'}
-                    onChange={() => setEditScope('future')}
-                    disabled={isLoading}
-                    className="mt-1"
-                  />
-                  <div className="space-y-1 text-sm">
-                    <p className="font-medium text-foreground">
-                      Somente a partir desta edição
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      As {pastTransactionsCount} transações passadas serão
-                      mantidas como estão. As alterações serão aplicadas apenas
-                      aos próximos lançamentos.
-                    </p>
+            isStartDateChanged ? (
+              <div className="space-y-5">
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-amber-950 dark:text-amber-200">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle
+                      aria-hidden="true"
+                      className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400"
+                    />
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium">
+                        A data de início foi alterada de{' '}
+                        <strong className="underline underline-offset-2">
+                          {formatDate(recurrence!.start_date)}
+                        </strong>{' '}
+                        para{' '}
+                        <strong className="underline underline-offset-2">
+                          {formatDate(startDate)}
+                        </strong>
+                        .
+                      </p>
+                      <p className="text-xs text-muted-foreground dark:text-amber-200/80">
+                        Alterações na data de início afetam obrigatoriamente todo
+                        o histórico da série. As {pastTransactionsCount}{' '}
+                        {pastTransactionsCount === 1
+                          ? 'transação gerada anteriormente será recalculada'
+                          : 'transações geradas anteriormente serão recalculadas'}
+                        : lançamentos que ficarem fora do novo cronograma serão
+                        removidos e novas transações serão geradas desde{' '}
+                        {formatDate(startDate)}.
+                      </p>
+                    </div>
                   </div>
-                </label>
+                </div>
 
-                <label
-                  className={`flex items-start gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${
-                    editScope === 'all'
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-input hover:bg-muted/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="edit-scope"
-                    value="all"
-                    checked={editScope === 'all'}
-                    onChange={() => setEditScope('all')}
-                    disabled={isLoading}
-                    className="mt-1"
-                  />
-                  <div className="space-y-1 text-sm">
-                    <p className="font-medium text-foreground">
-                      Todas as ocorrências (passadas e futuras)
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Atualiza o valor, categoria, tipo e descrição das{' '}
-                      {pastTransactionsCount} transações já registradas e aplica
-                      aos próximos lançamentos.
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              {error && (
-                <p
-                  role="alert"
-                  className="text-sm font-medium text-destructive"
-                >
-                  {error}
+                <p className="text-sm text-muted-foreground">
+                  Deseja prosseguir e reconstruir as transações desta recorrência a partir de {formatDate(startDate)}?
                 </p>
-              )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setStep('form');
-                    setError(null);
-                  }}
-                  disabled={isLoading}
-                >
-                  Voltar
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const validation = recurrenceSchema.safeParse({
-                      transaction_type: transactionType,
-                      amount,
-                      category_id: categoryId,
-                      frequency,
-                      start_date: startDate,
-                      description,
-                    });
-                    if (validation.success) {
-                      executeSave(validation.data, editScope);
-                    }
-                  }}
-                  disabled={isLoading}
-                >
-                  {isLoading ? 'Salvando...' : 'Confirmar e salvar'}
-                </Button>
+                {error && (
+                  <p
+                    role="alert"
+                    className="text-sm font-medium text-destructive"
+                  >
+                    {error}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setStep('form');
+                      setError(null);
+                    }}
+                    disabled={isLoading}
+                  >
+                    Voltar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const validation = recurrenceSchema.safeParse({
+                        transaction_type: transactionType,
+                        amount,
+                        category_id: categoryId,
+                        frequency,
+                        start_date: startDate,
+                        description,
+                      });
+                      if (validation.success) {
+                        executeSave(validation.data, 'all');
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Salvando...' : 'Confirmar e redefinir'}
+                  </Button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-5">
+                <p className="text-sm">
+                  Esta série recorrente já possui{' '}
+                  <strong className="font-semibold text-foreground">
+                    {pastTransactionsCount}{' '}
+                    {pastTransactionsCount === 1
+                      ? 'transação gerada anteriormente'
+                      : 'transações geradas anteriormente'}
+                  </strong>
+                  . Como você deseja aplicar as alterações?
+                </p>
+
+                <div
+                  className="space-y-2"
+                  role="radiogroup"
+                  aria-label="Escopo da alteração"
+                >
+                  <label
+                    className={`flex items-start gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${
+                      editScope === 'future'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-input hover:bg-muted/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="edit-scope"
+                      value="future"
+                      checked={editScope === 'future'}
+                      onChange={() => setEditScope('future')}
+                      disabled={isLoading}
+                      className="mt-1"
+                    />
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium text-foreground">
+                        Somente a partir desta edição
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        As {pastTransactionsCount} transações passadas serão
+                        mantidas como estão. As alterações serão aplicadas apenas
+                        aos próximos lançamentos.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-3 rounded-lg border p-3.5 cursor-pointer transition-colors ${
+                      editScope === 'all'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-input hover:bg-muted/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="edit-scope"
+                      value="all"
+                      checked={editScope === 'all'}
+                      onChange={() => setEditScope('all')}
+                      disabled={isLoading}
+                      className="mt-1"
+                    />
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium text-foreground">
+                        Todas as ocorrências (passadas e futuras)
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {isFrequencyChanged
+                          ? `Atualiza todo o histórico desta recorrência desde o início (${formatDate(
+                              recurrence!.start_date,
+                            )}). As transações anteriores serão recalculadas na frequência ${
+                              frequencyLabels[frequency]
+                            } — gerando novos lançamentos ou excluindo os excedentes.`
+                          : `Atualiza o valor, categoria, tipo e descrição das ${pastTransactionsCount} transações já registradas e aplica aos próximos lançamentos.`}
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                {error && (
+                  <p
+                    role="alert"
+                    className="text-sm font-medium text-destructive"
+                  >
+                    {error}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setStep('form');
+                      setError(null);
+                    }}
+                    disabled={isLoading}
+                  >
+                    Voltar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const validation = recurrenceSchema.safeParse({
+                        transaction_type: transactionType,
+                        amount,
+                        category_id: categoryId,
+                        frequency,
+                        start_date: startDate,
+                        description,
+                      });
+                      if (validation.success) {
+                        executeSave(validation.data, editScope);
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Salvando...' : 'Confirmar e salvar'}
+                  </Button>
+                </div>
+              </div>
+            )
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid gap-2">
