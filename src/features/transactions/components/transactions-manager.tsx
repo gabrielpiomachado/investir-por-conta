@@ -210,11 +210,8 @@ export function TransactionsManager({
     0,
   );
   const periodBalance = totalIncome - totalExpenses;
-  const hasCustomFilters =
-    hasCustomPeriod ||
-    categoryId !== 'all' ||
-    type !== 'all' ||
-    Boolean(normalizedSearch);
+  const hasActiveBadges =
+    hasCustomPeriod || categoryId !== 'all' || type !== 'all';
 
   const changeType = (nextType: TypeFilter) => {
     setCurrentPage(1);
@@ -420,10 +417,42 @@ export function TransactionsManager({
 
       <section
         aria-label="Período e filtros aplicados"
-        className="flex min-h-10 flex-wrap items-center gap-2"
+        className="flex flex-col items-center gap-3"
       >
-        {hasCustomFilters ? (
-          <>
+        {!hasCustomPeriod && (
+          <div className="flex w-full items-center justify-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Mês anterior"
+              onClick={() => {
+                setCurrentPage(1);
+                setSelectedMonth((month) => shiftMonth(month, -1));
+              }}
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            <p className="min-w-40 text-center font-medium">
+              {formatMonth(selectedMonth)}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Próximo mês"
+              onClick={() => {
+                setCurrentPage(1);
+                setSelectedMonth((month) => shiftMonth(month, 1));
+              }}
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </div>
+        )}
+
+        {hasActiveBadges && (
+          <div className="flex flex-wrap items-center justify-center gap-2">
             {hasCustomPeriod && (
               <Button
                 type="button"
@@ -472,51 +501,6 @@ export function TransactionsManager({
                 {type === 'income' ? 'Receitas' : 'Despesas'}
               </Button>
             )}
-            {normalizedSearch && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setCurrentPage(1);
-                  setSearchQuery('');
-                }}
-                aria-label="Remover filtro de pesquisa"
-              >
-                <X aria-hidden="true" />
-                Pesquisa: {searchQuery.trim()}
-              </Button>
-            )}
-          </>
-        ) : (
-          <div className="flex w-full items-center justify-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="Mês anterior"
-              onClick={() => {
-                setCurrentPage(1);
-                setSelectedMonth((month) => shiftMonth(month, -1));
-              }}
-            >
-              <ChevronLeft aria-hidden="true" />
-            </Button>
-            <p className="min-w-40 text-center font-medium">
-              {formatMonth(selectedMonth)}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="Próximo mês"
-              onClick={() => {
-                setCurrentPage(1);
-                setSelectedMonth((month) => shiftMonth(month, 1));
-              }}
-            >
-              <ChevronRight aria-hidden="true" />
-            </Button>
           </div>
         )}
       </section>
@@ -654,7 +638,7 @@ export function TransactionsManager({
                             <Icon aria-hidden="true" className="size-5" />
                           </div>
                           <div className="min-w-0">
-                            <p className="break-words font-medium">
+                            <p className="wrap-break-word font-medium">
                               {transaction.description || 'Sem descrição'}
                             </p>
                             <p className="mt-1 text-sm text-muted-foreground">
@@ -697,7 +681,7 @@ export function TransactionsManager({
               </ul>
 
               <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                <table className="w-full min-w-190 border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30 text-muted-foreground">
                       <th scope="col" className="px-6 py-3 font-medium">
